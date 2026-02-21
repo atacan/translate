@@ -108,7 +108,7 @@ struct ConfigCommand: ParsableCommand {
                 try store.save(table: table, path: path)
 
                 let editor = ConfigEditor.resolvedEditor(environment: ProcessInfo.processInfo.environment)
-                let process = ConfigEditor.makeProcess(editor: editor, configPath: path.path)
+                let process = try ConfigEditor.makeProcess(editor: editor, configPath: path.path)
                 try process.run()
                 process.waitUntilExit()
                 if process.terminationStatus != 0 {
