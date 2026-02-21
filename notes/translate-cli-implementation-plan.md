@@ -188,6 +188,7 @@ Implement config reading/writing and full precedence, including env vars and API
 
 **Concrete tasks**
 - Implement config path resolver: `--config` > `TRANSLATE_CONFIG` > default path.
+- Expand `~` and relative paths to absolute filesystem paths before read/write and for `config path` output.
 - Implement hybrid TOML strategy:
   - typed structs for stable fields
   - `TOMLTable` traversal for dynamic/hyphenated keys like `providers.openai-compatible.<name>`
@@ -200,10 +201,9 @@ Implement config reading/writing and full precedence, including env vars and API
 
 **Small Swift snippets**
 ```swift
-func resolvedConfigPath(cli: String?, env: [String: String]) -> String {
-    if let cli { return cli }
-    if let fromEnv = env["TRANSLATE_CONFIG"], !fromEnv.isEmpty { return fromEnv }
-    return "~/.config/translate/config.toml"
+func resolvedConfigPath(cli: String?, env: [String: String], home: URL) -> URL {
+    let raw = cli ?? env["TRANSLATE_CONFIG"] ?? "~/.config/translate/config.toml"
+    return expandToAbsoluteURL(raw, homeDirectory: home)
 }
 ```
 
@@ -218,6 +218,7 @@ enum ProvidersCodingKeys: String, CodingKey {
 - `swift test --filter ConfigTests`
 - Round-trip tests for config with named `openai-compatible` endpoints.
 - Permission test on newly created config file.
+- Tests asserting `config path` prints expanded absolute path.
 
 **Exit criteria**
 - Config/env precedence is deterministic and covered by tests.
@@ -350,7 +351,9 @@ Implement runtime orchestration: retries, timeout, streaming, sanitization, and 
 **Concrete tasks**
 - Build orchestration for single/multi-file runs and summary reporting.
 - Implement retry policy in `HTTPClient` via `UsefulThings.withRetry` wrapper.
-- Respect `Retry-After` header and context-window non-retry behavior.
+- Unwrap `RetryError<ProviderError>` from `withRetry` and remap to `lastError` so spec error text and exit semantics are preserved.
+- Respect `Retry-After` override using case-insensitive header lookup and both legal formats (`delta-seconds`, HTTP-date).
+- Respect context-window non-retry behavior.
 - Add stdout streaming with cumulative-snapshot delta handling.
 - Add buffered writes for file outputs.
 - Implement fence stripping and non-TTY confirmation abort semantics.
@@ -368,8 +371,18 @@ for try await snap in stream {
 ```
 
 ```swift
-if let retryAfter = response.headers["Retry-After"] {
-    delay = parseRetryAfter(retryAfter)
+do {
+    return try await withRetry(configuration: retryConfig, predicate: retryPredicate) {
+        try await singleAttemptRequest()
+    }
+} catch let e as RetryError<ProviderError> {
+    throw e.lastError
+}
+```
+
+```swift
+if let retryAfter = header(named: "retry-after", in: response.headers) {
+    delay = parseRetryAfterDeltaSecondsOrHTTPDate(retryAfter, now: clock.now)
 }
 ```
 
@@ -388,7 +401,10 @@ let retryConfig = RetryConfiguration(
 - `swift test --filter StreamingTests`
 - CI-style non-TTY integration tests for confirmation flow.
 - Retry tests proving only 429/500/502/503/504 are retried.
+- Retry tests proving `Retry-After` header lookup is case-insensitive.
+- Retry tests proving both `Retry-After` formats are supported: `delta-seconds` and HTTP-date.
 - Retry tests proving `Retry-After` overrides computed delay.
+- Retry tests proving `RetryError<ProviderError>` is remapped to `lastError`.
 - Timeout tests proving timeout is per request attempt, not whole sequence.
 
 **Exit criteria**
