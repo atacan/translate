@@ -3,22 +3,6 @@
 **Version:** 1.2
 **Purpose:** This document is the complete specification for the `translate` command-line tool. It covers all commands, flags, arguments, behaviors, validation rules, configuration, prompt templating, and provider handling. The developer receiving this document has full freedom to choose the implementation language, toolchain, and packaging strategy.
 
-**Changelog from v1.1:**
-- Fixed contradiction: named endpoint resolution order now matches collision rule (built-ins always win)
-- Removed `--timeout` reference from error message; replaced with `config set` guidance
-- Added missing flag conflict rules: `--in-place` + `--output`, `--in-place` + `--suffix`, `--suffix` with single file, `--jobs` with non-file input, `--to auto`
-- Defined invalid language code error message
-- Moved `--text` / `-T` to INPUT section in help text
-- Removed short flag `-T` from `--text` to avoid `-t` / `-T` case confusion; `--text` is now long-form only
-- Fixed §7.3: removed `--context_block` from ignored flags list (it is a placeholder, not a CLI flag)
-- Clarified `presets show`: displays raw templates with placeholders intact
-- Added `--format` to ignored flags for prompt-less providers
-- Defined `--to auto` as a hard error
-- Addressed single-file glob output asymmetry: glob always uses file output mode
-- Updated all default user prompts to use `<source_text>` XML tags instead of triple backticks to avoid delimiter collision
-- Added extensionless file naming rule (§3.4)
-- Added Apple Translate formatting note to Developer Notes
-
 ---
 
 ## Table of Contents
