@@ -29,9 +29,13 @@ docker run --rm --platform linux/amd64 \
   /translate --version
 
 echo "==> Testing linux/arm64 binary in Fedora"
-docker run --rm --platform linux/arm64 \
+if ! docker run --rm --platform linux/arm64 \
   -v "$ARM64_BIN":/translate:ro \
   fedora:latest \
-  /translate --version
+  /translate --version; then
+  echo "Error: arm64 runtime check failed." >&2
+  echo "Hint: on GitHub Actions ubuntu runners, enable QEMU with docker/setup-qemu-action@v3 (platforms: arm64)." >&2
+  exit 1
+fi
 
 echo "==> Fedora runtime check passed for both Linux binaries"
