@@ -1,0 +1,24 @@
+{
+    "configurations": [
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:translate}",
+            "name": "Debug translate",
+            "target": "translate",
+            "configuration": "debug",
+            "preLaunchTask": "swift: Build Debug translate"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:translate}",
+            "name": "Release translate",
+            "target": "translate",
+            "configuration": "release",
+            "preLaunchTask": "swift: Build Release translate"
+        }
+    ]
+}
