@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "${SCRIPT_DIR}/scripts/release/common.sh"
+RELEASE_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${RELEASE_SCRIPT_DIR}/scripts/release/common.sh"
 
 FORMULA_ONLY=false
 if [[ "${1:-}" == "--formula-only" ]]; then
@@ -58,11 +58,11 @@ if [[ "$FORMULA_ONLY" == false ]]; then
   trap - EXIT
 
   echo "==> Building binaries"
-  "${SCRIPT_DIR}/scripts/release/build-macos.sh"
-  "${SCRIPT_DIR}/scripts/release/build-linux.sh"
+  "${RELEASE_SCRIPT_DIR}/scripts/release/build-macos.sh"
+  "${RELEASE_SCRIPT_DIR}/scripts/release/build-linux.sh"
 
   echo "==> Packaging archives"
-  "${SCRIPT_DIR}/scripts/release/package-archives.sh" "$VERSION"
+  "${RELEASE_SCRIPT_DIR}/scripts/release/package-archives.sh" "$VERSION"
 
   echo "==> Committing and tagging"
   git -C "$REPO_ROOT" add "$VERSION_FILE"
@@ -89,7 +89,7 @@ fi
 ensure_archives_present "$VERSION"
 
 echo "==> Updating Homebrew formula"
-"${SCRIPT_DIR}/scripts/release/update-formula.sh" "$VERSION" "$TAG"
+"${RELEASE_SCRIPT_DIR}/scripts/release/update-formula.sh" "$VERSION" "$TAG"
 
 echo
 echo "Release complete. Install with: brew install ${TAP_REPO#*/}/${NAME}"
