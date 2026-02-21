@@ -7,7 +7,8 @@ struct TranslateCommand: AsyncParsableCommand {
         abstract: "Translate text and files with configurable providers and prompt presets.",
         version: "1.0.0",
         subcommands: [TranslateRunCommand.self, ConfigCommand.self, PresetsCommand.self],
-        defaultSubcommand: TranslateRunCommand.self
+        defaultSubcommand: TranslateRunCommand.self,
+        helpNames: []
     )
 
     mutating func run() async throws {
@@ -23,8 +24,15 @@ struct TranslateRunCommand: AsyncParsableCommand {
 
     @OptionGroup var global: GlobalOptions
     @OptionGroup var options: TranslateOptions
+    @Flag(name: [.customShort("h"), .customLong("help")], help: "Show this help.")
+    var showHelp = false
 
     mutating func run() async throws {
+        if showHelp {
+            TerminalIO(quiet: false, verbose: false).writeStdout(TranslateHelp.root)
+            return
+        }
+
         do {
             try await TranslationOrchestrator().run(options: options, global: global)
         } catch let appError as AppError {

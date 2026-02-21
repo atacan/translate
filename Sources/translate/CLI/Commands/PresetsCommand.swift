@@ -5,7 +5,8 @@ struct PresetsCommand: ParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "presets",
         abstract: "Manage and inspect presets",
-        subcommands: [List.self, Show.self, Which.self]
+        subcommands: [List.self, Show.self, Which.self],
+        helpNames: .shortAndLong
     )
 
     struct List: ParsableCommand {

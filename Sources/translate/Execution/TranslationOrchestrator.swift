@@ -158,6 +158,7 @@ struct TranslationOrchestrator {
             if global.verbose {
                 emitVerboseMetadata(
                     terminal: terminal,
+                    sourceLanguage: from,
                     providerName: providerSelection.name,
                     model: providerSelection.model,
                     usage: translated.usage,
@@ -218,6 +219,7 @@ struct TranslationOrchestrator {
             if global.verbose {
                 emitVerboseMetadata(
                     terminal: terminal,
+                    sourceLanguage: from,
                     providerName: providerSelection.name,
                     model: providerSelection.model,
                     usage: translated.usage,
@@ -465,6 +467,7 @@ struct TranslationOrchestrator {
                 if verbose {
                     emitVerboseMetadata(
                         terminal: terminal,
+                        sourceLanguage: from,
                         providerName: providerName,
                         model: model,
                         usage: result.usage,
@@ -478,6 +481,7 @@ struct TranslationOrchestrator {
             if verbose {
                 emitVerboseMetadata(
                     terminal: terminal,
+                    sourceLanguage: from,
                     providerName: providerName,
                     model: model,
                     usage: result.usage,
@@ -529,6 +533,9 @@ struct TranslationOrchestrator {
             for try await chunk in stream {
                 terminal.writeStdout(chunk, terminator: "")
                 aggregated += chunk
+            }
+            if aggregated.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                throw ProviderError.invalidResponse("Provider returned an empty response.")
             }
             if !aggregated.hasSuffix("\n") {
                 terminal.writeStdout("", terminator: "\n")
@@ -705,6 +712,7 @@ struct TranslationOrchestrator {
                         if verbose {
                             emitVerboseMetadata(
                                 terminal: terminal,
+                                sourceLanguage: from,
                                 providerName: providerName,
                                 model: model,
                                 usage: usage,
@@ -723,6 +731,7 @@ struct TranslationOrchestrator {
                         if verbose {
                             emitVerboseMetadata(
                                 terminal: terminal,
+                                sourceLanguage: from,
                                 providerName: providerName,
                                 model: model,
                                 usage: usage,
@@ -736,6 +745,7 @@ struct TranslationOrchestrator {
                     if verbose {
                         emitVerboseMetadata(
                             terminal: terminal,
+                            sourceLanguage: from,
                             providerName: providerName,
                             model: model,
                             usage: usage,
@@ -755,6 +765,7 @@ struct TranslationOrchestrator {
 
     private func emitVerboseMetadata(
         terminal: TerminalIO,
+        sourceLanguage: NormalizedLanguage,
         providerName: String,
         model: String?,
         usage: UsageInfo?,
@@ -763,6 +774,11 @@ struct TranslationOrchestrator {
     ) {
         terminal.info("Provider: \(providerName)")
         terminal.info("Model: \(model ?? "(provider default)")")
+        if sourceLanguage.isAuto {
+            terminal.info("Detected source language: unavailable (provider did not report)")
+        } else {
+            terminal.info("Detected source language: \(sourceLanguage.displayName)")
+        }
         if let usage {
             let input = usage.inputTokens.map(String.init) ?? "n/a"
             let output = usage.outputTokens.map(String.init) ?? "n/a"

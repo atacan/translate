@@ -113,6 +113,39 @@ final class RetryPolicyTests: XCTestCase {
         XCTAssertEqual(recorded.count, 1)
         XCTAssertEqual(recorded.first ?? -1, 7, accuracy: 0.001)
     }
+
+    func testRetryPolicyParsesHTTPDateRetryAfter() {
+        let referenceNow = Date(timeIntervalSince1970: 1_700_000_000)
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        formatter.dateFormat = "EEE, dd MMM yyyy HH:mm:ss zzz"
+        let headerDate = formatter.string(from: referenceNow.addingTimeInterval(9))
+
+        let policy = RetryPolicy(
+            maxAttempts: 2,
+            baseDelaySeconds: 1,
+            sleeper: { _ in },
+            now: { referenceNow },
+            randomizer: { _ in 0 }
+        )
+
+        let delay = policy.delaySeconds(attempt: 1, headers: ["Retry-After": headerDate])
+        XCTAssertEqual(delay, 9, accuracy: 0.001)
+    }
+
+    func testRetryPolicyFallsBackToExponentialBackoff() {
+        let policy = RetryPolicy(
+            maxAttempts: 2,
+            baseDelaySeconds: 2,
+            sleeper: { _ in },
+            now: { Date() },
+            randomizer: { _ in 0 }
+        )
+
+        XCTAssertEqual(policy.delaySeconds(attempt: 1, headers: [:]), 2, accuracy: 0.001)
+        XCTAssertEqual(policy.delaySeconds(attempt: 2, headers: [:]), 4, accuracy: 0.001)
+    }
 }
 
 actor LockedCounter {

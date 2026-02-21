@@ -26,4 +26,16 @@ final class StreamingTests: XCTestCase {
         ]
         XCTAssertEqual(OpenAIStreamParser.deltaContent(from: arrayPayload), "jour!")
     }
+
+    func testOpenAIStreamParserExtractsNonStreamingBodyContent() {
+        let body = """
+        {"choices":[{"message":{"content":"Bonjour"}}]}
+        """
+        XCTAssertEqual(OpenAIStreamParser.contentFromNonStreamingBody(body), "Bonjour")
+    }
+
+    func testOpenAIStreamParserReturnsNilForInvalidOrEmptyNonStreamingBody() {
+        XCTAssertNil(OpenAIStreamParser.contentFromNonStreamingBody("{\"choices\":[]}"))
+        XCTAssertNil(OpenAIStreamParser.contentFromNonStreamingBody("not json"))
+    }
 }

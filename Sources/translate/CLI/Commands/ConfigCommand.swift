@@ -6,7 +6,8 @@ struct ConfigCommand: ParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "config",
         abstract: "Manage configuration",
-        subcommands: [Show.self, Path.self, Get.self, Set.self, Unset.self, Edit.self]
+        subcommands: [Show.self, Path.self, Get.self, Set.self, Unset.self, Edit.self],
+        helpNames: .shortAndLong
     )
 
     struct Show: ParsableCommand {
@@ -106,16 +107,8 @@ struct ConfigCommand: ParsableCommand {
                 emitNamedProviderCollisionWarnings(config: resolved)
                 try store.save(table: table, path: path)
 
-                #if os(Windows)
-                let fallbackEditor = "notepad"
-                #else
-                let fallbackEditor = "vi"
-                #endif
-                let editor = ProcessInfo.processInfo.environment["EDITOR"] ?? fallbackEditor
-
-                let process = Process()
-                process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-                process.arguments = [editor, path.path]
+                let editor = ConfigEditor.resolvedEditor(environment: ProcessInfo.processInfo.environment)
+                let process = ConfigEditor.makeProcess(editor: editor, configPath: path.path)
                 try process.run()
                 process.waitUntilExit()
                 if process.terminationStatus != 0 {

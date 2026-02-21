@@ -38,8 +38,8 @@ struct DeepLProvider: TranslationProvider {
             )
         )
 
-        let maxAttempts = max(1, request.network.retries + 1)
-        for attempt in 1...maxAttempts {
+        let retryPolicy = RetryPolicy(network: request.network, sleeper: sleeper)
+        for attempt in 1...retryPolicy.maxAttempts {
             let output: Operations.translateText.Output
             do {
                 output = try await withTimeout(seconds: request.timeoutSeconds) {
@@ -47,13 +47,8 @@ struct DeepLProvider: TranslationProvider {
                 }
             } catch {
                 let mappedError = mapExecutorError(error, timeoutSeconds: request.timeoutSeconds)
-                if attempt < maxAttempts, shouldRetry(error: mappedError) {
-                    let delay = retryDelay(
-                        attempt: attempt,
-                        baseDelaySeconds: request.network.retryBaseDelaySeconds,
-                        headers: [:]
-                    )
-                    try await sleeper(delay)
+                if shouldRetry(error: mappedError, attempt: attempt, retryPolicy: retryPolicy) {
+                    try await retryPolicy.sleepBeforeRetry(attempt: attempt, headers: [:])
                     continue
                 }
                 throw mappedError
@@ -81,40 +76,25 @@ struct DeepLProvider: TranslationProvider {
             case .uriTooLong(let response):
                 throw ProviderError.http(statusCode: 414, headers: traceHeaderDictionary(response.headers.X_hyphen_Trace_hyphen_ID), body: "")
             case .tooManyRequests(let response):
-                if attempt < maxAttempts {
+                if retryPolicy.shouldRetry(statusCode: 429, attempt: attempt) {
                     let headers = traceHeaderDictionary(response.headers.X_hyphen_Trace_hyphen_ID)
-                    let delay = retryDelay(
-                        attempt: attempt,
-                        baseDelaySeconds: request.network.retryBaseDelaySeconds,
-                        headers: headers
-                    )
-                    try await sleeper(delay)
+                    try await retryPolicy.sleepBeforeRetry(attempt: attempt, headers: headers)
                     continue
                 }
                 throw ProviderError.http(statusCode: 429, headers: traceHeaderDictionary(response.headers.X_hyphen_Trace_hyphen_ID), body: "")
             case .code456(let response):
                 throw ProviderError.http(statusCode: 456, headers: traceHeaderDictionary(response.headers.X_hyphen_Trace_hyphen_ID), body: "")
             case .internalServerError(let response):
-                if attempt < maxAttempts {
+                if retryPolicy.shouldRetry(statusCode: 500, attempt: attempt) {
                     let headers = traceHeaderDictionary(response.headers.X_hyphen_Trace_hyphen_ID)
-                    let delay = retryDelay(
-                        attempt: attempt,
-                        baseDelaySeconds: request.network.retryBaseDelaySeconds,
-                        headers: headers
-                    )
-                    try await sleeper(delay)
+                    try await retryPolicy.sleepBeforeRetry(attempt: attempt, headers: headers)
                     continue
                 }
                 throw ProviderError.http(statusCode: 500, headers: traceHeaderDictionary(response.headers.X_hyphen_Trace_hyphen_ID), body: "")
             case .gatewayTimeout(let response):
-                if attempt < maxAttempts {
+                if retryPolicy.shouldRetry(statusCode: 504, attempt: attempt) {
                     let headers = traceHeaderDictionary(response.headers.X_hyphen_Trace_hyphen_ID)
-                    let delay = retryDelay(
-                        attempt: attempt,
-                        baseDelaySeconds: request.network.retryBaseDelaySeconds,
-                        headers: headers
-                    )
-                    try await sleeper(delay)
+                    try await retryPolicy.sleepBeforeRetry(attempt: attempt, headers: headers)
                     continue
                 }
                 throw ProviderError.http(statusCode: 504, headers: traceHeaderDictionary(response.headers.X_hyphen_Trace_hyphen_ID), body: "")
@@ -122,13 +102,8 @@ struct DeepLProvider: TranslationProvider {
                 throw ProviderError.http(statusCode: 529, headers: traceHeaderDictionary(response.headers.X_hyphen_Trace_hyphen_ID), body: "")
             case .undocumented(let statusCode, let payload):
                 let headers = dictionary(from: payload.headerFields)
-                if attempt < maxAttempts, shouldRetry(statusCode: statusCode) {
-                    let delay = retryDelay(
-                        attempt: attempt,
-                        baseDelaySeconds: request.network.retryBaseDelaySeconds,
-                        headers: headers
-                    )
-                    try await sleeper(delay)
+                if retryPolicy.shouldRetry(statusCode: statusCode, attempt: attempt) {
+                    try await retryPolicy.sleepBeforeRetry(attempt: attempt, headers: headers)
                     continue
                 }
                 throw ProviderError.http(statusCode: statusCode, headers: headers, body: "")
@@ -195,44 +170,11 @@ struct DeepLProvider: TranslationProvider {
         code.replacingOccurrences(of: "_", with: "-").uppercased()
     }
 
-    private func shouldRetry(error: ProviderError) -> Bool {
+    private func shouldRetry(error: ProviderError, attempt: Int, retryPolicy: RetryPolicy) -> Bool {
         guard case .http(let statusCode, _, _) = error else {
             return false
         }
-        return shouldRetry(statusCode: statusCode)
-    }
-
-    private func shouldRetry(statusCode: Int) -> Bool {
-        [429, 500, 502, 503, 504].contains(statusCode)
-    }
-
-    private func retryDelay(attempt: Int, baseDelaySeconds: Int, headers: [String: String]) -> Double {
-        if let retryAfterHeader = headers.first(where: { $0.key.caseInsensitiveCompare("retry-after") == .orderedSame })?.value,
-           let retryAfter = parseRetryAfter(retryAfterHeader)
-        {
-            return retryAfter
-        }
-
-        let base = max(1, baseDelaySeconds)
-        let exponential = min(Double(base) * pow(2.0, Double(attempt - 1)), 30.0)
-        let jitter = exponential * 0.2
-        return max(0, exponential + Double.random(in: -jitter...jitter))
-    }
-
-    private func parseRetryAfter(_ value: String) -> Double? {
-        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        if let seconds = Double(trimmed), seconds >= 0 {
-            return seconds
-        }
-
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = TimeZone(secondsFromGMT: 0)
-        formatter.dateFormat = "EEE, dd MMM yyyy HH:mm:ss zzz"
-        if let date = formatter.date(from: trimmed) {
-            return max(0, date.timeIntervalSinceNow)
-        }
-        return nil
+        return retryPolicy.shouldRetry(statusCode: statusCode, attempt: attempt)
     }
 
     private func traceHeaderDictionary(_ traceID: Components.Headers.X_hyphen_Trace_hyphen_ID?) -> [String: String] {

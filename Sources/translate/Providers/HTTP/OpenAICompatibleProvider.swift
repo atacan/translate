@@ -33,6 +33,36 @@ struct OpenAIStreamParser {
 
         return ""
     }
+
+    static func messageContent(from json: [String: Any]) -> String {
+        guard
+            let choices = json["choices"] as? [[String: Any]],
+            let first = choices.first,
+            let message = first["message"] as? [String: Any]
+        else {
+            return ""
+        }
+
+        if let content = message["content"] as? String {
+            return content
+        }
+
+        if let contentParts = message["content"] as? [[String: Any]] {
+            return contentParts.compactMap { $0["text"] as? String }.joined()
+        }
+
+        return ""
+    }
+
+    static func contentFromNonStreamingBody(_ bodyText: String) -> String? {
+        guard let data = bodyText.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else {
+            return nil
+        }
+        let content = messageContent(from: json).trimmingCharacters(in: .whitespacesAndNewlines)
+        return content.isEmpty ? nil : content
+    }
 }
 
 struct OpenAICompatibleProvider: TranslationProvider {
@@ -121,46 +151,84 @@ struct OpenAICompatibleProvider: TranslationProvider {
         return AsyncThrowingStream { continuation in
             Task {
                 do {
-                    var urlRequest = URLRequest(url: endpoint)
-                    urlRequest.httpMethod = "POST"
-                    urlRequest.httpBody = body
-                    urlRequest.timeoutInterval = TimeInterval(request.timeoutSeconds)
-                    for (header, value) in headers {
-                        urlRequest.setValue(value, forHTTPHeaderField: header)
-                    }
+                    let maxAttempts = max(1, request.network.retries + 1)
+                    for attempt in 1...maxAttempts {
+                        var urlRequest = URLRequest(url: endpoint)
+                        urlRequest.httpMethod = "POST"
+                        urlRequest.httpBody = body
+                        urlRequest.timeoutInterval = TimeInterval(request.timeoutSeconds)
+                        for (header, value) in headers {
+                            urlRequest.setValue(value, forHTTPHeaderField: header)
+                        }
 
-                    let (bytes, response) = try await URLSession.shared.bytes(for: urlRequest)
-                    guard let httpResponse = response as? HTTPURLResponse else {
-                        throw ProviderError.invalidResponse("Invalid HTTP response.")
-                    }
+                        let (bytes, response) = try await URLSession.shared.bytes(for: urlRequest)
+                        guard let httpResponse = response as? HTTPURLResponse else {
+                            throw ProviderError.invalidResponse("Invalid HTTP response.")
+                        }
 
-                    let normalizedHeaders = normalizeHeaders(httpResponse.allHeaderFields)
-                    guard (200...299).contains(httpResponse.statusCode) else {
-                        var bodyText = ""
+                        let normalizedHeaders = normalizeHeaders(httpResponse.allHeaderFields)
+                        if !(200...299).contains(httpResponse.statusCode) {
+                            var bodyText = ""
+                            for try await line in bytes.lines {
+                                bodyText += line
+                            }
+                            if httpResponse.statusCode == 400, isContextWindowError(bodyText) {
+                                throw ProviderError.invalidResponse("Error: Input exceeds the model's context window. Consider a model with a larger context window, or split the input into smaller files.")
+                            }
+
+                            if attempt < maxAttempts,
+                               httpClient.shouldRetry(statusCode: httpResponse.statusCode)
+                            {
+                                let delaySeconds = httpClient.retryDelaySeconds(
+                                    attempt: attempt,
+                                    baseDelaySeconds: request.network.retryBaseDelaySeconds,
+                                    headers: normalizedHeaders
+                                )
+                                try await httpClient.sleep(seconds: delaySeconds)
+                                continue
+                            }
+
+                            throw ProviderError.http(statusCode: httpResponse.statusCode, headers: normalizedHeaders, body: bodyText)
+                        }
+
+                        var emittedAnyChunk = false
+                        var nonSSEBody = ""
                         for try await line in bytes.lines {
-                            bodyText += line
+                            if let payload = OpenAIStreamParser.payload(fromSSELine: line),
+                               let data = payload.data(using: .utf8),
+                               let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+                            {
+                                let delta = OpenAIStreamParser.deltaContent(from: json)
+                                if !delta.isEmpty {
+                                    continuation.yield(delta)
+                                    emittedAnyChunk = true
+                                }
+                                continue
+                            }
+
+                            let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+                            if !trimmed.isEmpty {
+                                if !nonSSEBody.isEmpty {
+                                    nonSSEBody += "\n"
+                                }
+                                nonSSEBody += line
+                            }
                         }
-                        if httpResponse.statusCode == 400, isContextWindowError(bodyText) {
-                            throw ProviderError.invalidResponse("Error: Input exceeds the model's context window. Consider a model with a larger context window, or split the input into smaller files.")
+
+                        if !emittedAnyChunk,
+                           let fallbackContent = OpenAIStreamParser.contentFromNonStreamingBody(nonSSEBody)
+                        {
+                            continuation.yield(fallbackContent)
+                            emittedAnyChunk = true
                         }
-                        throw ProviderError.http(statusCode: httpResponse.statusCode, headers: normalizedHeaders, body: bodyText)
+
+                        if !emittedAnyChunk {
+                            throw ProviderError.invalidResponse("Provider returned an empty response.")
+                        }
+
+                        continuation.finish()
+                        return
                     }
-
-                    for try await line in bytes.lines {
-                        guard let payload = OpenAIStreamParser.payload(fromSSELine: line),
-                              let data = payload.data(using: .utf8),
-                              let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
-                        else {
-                            continue
-                        }
-
-                        let delta = OpenAIStreamParser.deltaContent(from: json)
-                        if !delta.isEmpty {
-                            continuation.yield(delta)
-                        }
-                    }
-
-                    continuation.finish()
                 } catch {
                     if let urlError = error as? URLError, urlError.code == .timedOut {
                         continuation.finish(throwing: ProviderError.timeout(seconds: request.timeoutSeconds))
@@ -190,23 +258,7 @@ struct OpenAICompatibleProvider: TranslationProvider {
     }
 
     private func extractOpenAIMessageContent(from json: [String: Any]) -> String {
-        guard
-            let choices = json["choices"] as? [[String: Any]],
-            let first = choices.first,
-            let message = first["message"] as? [String: Any]
-        else {
-            return ""
-        }
-
-        if let content = message["content"] as? String {
-            return content
-        }
-
-        if let contentParts = message["content"] as? [[String: Any]] {
-            return contentParts.compactMap { $0["text"] as? String }.joined()
-        }
-
-        return ""
+        return OpenAIStreamParser.messageContent(from: json)
     }
 
     private func isContextWindowError(_ body: String) -> Bool {

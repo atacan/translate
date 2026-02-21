@@ -34,16 +34,11 @@ struct HTTPClient: Sendable {
     }
 
     func send(_ request: HTTPRequest) async throws -> HTTPResponse {
-        let maxAttempts = max(1, request.network.retries + 1)
-        for attempt in 1...maxAttempts {
+        let retryPolicy = RetryPolicy(network: request.network, sleeper: sleeper)
+        for attempt in 1...retryPolicy.maxAttempts {
             let response = try await singleAttempt(request)
-            if attempt < maxAttempts && shouldRetry(statusCode: response.statusCode) {
-                let delaySeconds = retryDelay(
-                    attempt: attempt,
-                    baseDelaySeconds: request.network.retryBaseDelaySeconds,
-                    headers: response.headers
-                )
-                try await sleeper(delaySeconds)
+            if retryPolicy.shouldRetry(statusCode: response.statusCode, attempt: attempt) {
+                try await retryPolicy.sleepBeforeRetry(attempt: attempt, headers: response.headers)
                 continue
             }
             return response
@@ -80,42 +75,21 @@ struct HTTPClient: Sendable {
         }
     }
 
-    private func shouldRetry(statusCode: Int) -> Bool {
-        [429, 500, 502, 503, 504].contains(statusCode)
+    func shouldRetry(statusCode: Int) -> Bool {
+        RetryPolicy.shouldRetry(statusCode: statusCode)
     }
 
-    private func retryDelay(attempt: Int, baseDelaySeconds: Int, headers: [String: String]?) -> Double {
-        if let headers,
-           let retryAfterHeader = headerValue("retry-after", in: headers),
-           let retryAfter = parseRetryAfter(retryAfterHeader)
-        {
-            return retryAfter
-        }
-
-        let base = max(1, baseDelaySeconds)
-        let exponential = min(Double(base) * pow(2.0, Double(attempt - 1)), 30.0)
-        let jitter = exponential * 0.2
-        return max(0, exponential + Double.random(in: -jitter...jitter))
+    func retryDelaySeconds(attempt: Int, baseDelaySeconds: Int, headers: [String: String]?) -> Double {
+        let retryPolicy = RetryPolicy(
+            maxAttempts: max(2, attempt + 1),
+            baseDelaySeconds: baseDelaySeconds,
+            sleeper: sleeper
+        )
+        return retryPolicy.delaySeconds(attempt: attempt, headers: headers ?? [:])
     }
 
-    private func parseRetryAfter(_ value: String) -> Double? {
-        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        if let seconds = Double(trimmed), seconds >= 0 {
-            return seconds
-        }
-
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = TimeZone(secondsFromGMT: 0)
-        formatter.dateFormat = "EEE, dd MMM yyyy HH:mm:ss zzz"
-        if let date = formatter.date(from: trimmed) {
-            return max(0, date.timeIntervalSinceNow)
-        }
-        return nil
-    }
-
-    private func headerValue(_ name: String, in headers: [String: String]) -> String? {
-        headers.first(where: { $0.key.caseInsensitiveCompare(name) == .orderedSame })?.value
+    func sleep(seconds: Double) async throws {
+        try await sleeper(seconds)
     }
 
     private func normalizeHeaders(_ rawHeaders: [AnyHashable: Any]) -> [String: String] {
