@@ -3,6 +3,13 @@ import Foundation
 struct OutputWriter {
     let terminal: TerminalIO
     let prompter: ConfirmationPrompter
+    let skipOverwriteConfirmation: Bool
+
+    init(terminal: TerminalIO, prompter: ConfirmationPrompter, skipOverwriteConfirmation: Bool = false) {
+        self.terminal = terminal
+        self.prompter = prompter
+        self.skipOverwriteConfirmation = skipOverwriteConfirmation
+    }
 
     func write(_ text: String, mode: OutputMode) throws -> URL? {
         switch mode {
@@ -18,7 +25,7 @@ struct OutputWriter {
     }
 
     func writeFile(text: String, destination: URL) throws {
-        if FileManager.default.fileExists(atPath: destination.path) {
+        if !skipOverwriteConfirmation, FileManager.default.fileExists(atPath: destination.path) {
             try prompter.confirm("Output file '\(destination.lastPathComponent)' already exists. Overwrite? [y/N]")
         }
 

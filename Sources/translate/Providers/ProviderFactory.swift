@@ -20,7 +20,8 @@ struct ProviderFactory {
         modelOverride: String?,
         baseURLOverride: String?,
         apiKeyOverride: String?,
-        explicitProvider: Bool
+        explicitProvider: Bool,
+        requireCredentials: Bool = true
     ) throws -> ProviderSelection {
         let lowerName = providerName.lowercased()
 
@@ -28,7 +29,14 @@ struct ProviderFactory {
             guard let id = ProviderID(rawValue: lowerName) else {
                 throw AppError.invalidArguments("Unknown provider '\(providerName)'. Run translate --help for valid providers.")
             }
-            return try makeBuiltIn(id: id, modelOverride: modelOverride, baseURLOverride: baseURLOverride, apiKeyOverride: apiKeyOverride, explicitProvider: explicitProvider)
+            return try makeBuiltIn(
+                id: id,
+                modelOverride: modelOverride,
+                baseURLOverride: baseURLOverride,
+                apiKeyOverride: apiKeyOverride,
+                explicitProvider: explicitProvider,
+                requireCredentials: requireCredentials
+            )
         }
 
         if let named = config.namedOpenAICompatible[providerName] {
@@ -61,7 +69,8 @@ struct ProviderFactory {
         modelOverride: String?,
         baseURLOverride: String?,
         apiKeyOverride: String?,
-        explicitProvider: Bool
+        explicitProvider: Bool,
+        requireCredentials: Bool
     ) throws -> ProviderSelection {
         switch id {
         case .openai:
@@ -72,7 +81,7 @@ struct ProviderFactory {
             let model = modelOverride ?? cfg?.model ?? BuiltInDefaults.openAIModel
             let baseURL = cfg?.baseURL ?? BuiltInDefaults.openAIBaseURL
             let apiKey = apiKeyOverride ?? cfg?.apiKey ?? env["OPENAI_API_KEY"]
-            guard let apiKey, !apiKey.isEmpty else {
+            guard !requireCredentials || (apiKey?.isEmpty == false) else {
                 throw AppError.runtime("Error: OPENAI_API_KEY is required for provider 'openai'.")
             }
 
@@ -95,14 +104,14 @@ struct ProviderFactory {
             let model = modelOverride ?? cfg?.model ?? BuiltInDefaults.anthropicModel
             let baseURL = cfg?.baseURL ?? BuiltInDefaults.anthropicBaseURL
             let apiKey = apiKeyOverride ?? cfg?.apiKey ?? env["ANTHROPIC_API_KEY"]
-            guard let apiKey, !apiKey.isEmpty else {
+            guard !requireCredentials || (apiKey?.isEmpty == false) else {
                 throw AppError.runtime("Error: ANTHROPIC_API_KEY is required for provider 'anthropic'.")
             }
 
             return ProviderSelection(
                 name: id.rawValue,
                 id: id,
-                provider: AnthropicProvider(baseURL: baseURL, model: model, apiKey: apiKey, httpClient: HTTPClient()),
+                provider: AnthropicProvider(baseURL: baseURL, model: model, apiKey: apiKey ?? "", httpClient: HTTPClient()),
                 model: model,
                 baseURL: baseURL,
                 apiKey: apiKey,
@@ -188,14 +197,14 @@ struct ProviderFactory {
 
             let cfg = config.providers[id.rawValue]
             let apiKey = apiKeyOverride ?? cfg?.apiKey ?? env["DEEPL_API_KEY"]
-            guard let apiKey, !apiKey.isEmpty else {
+            guard !requireCredentials || (apiKey?.isEmpty == false) else {
                 throw AppError.runtime("Error: DEEPL_API_KEY is required for provider 'deepl'.")
             }
 
             return ProviderSelection(
                 name: id.rawValue,
                 id: id,
-                provider: DeepLProvider(apiKey: apiKey),
+                provider: DeepLProvider(apiKey: apiKey ?? ""),
                 model: nil,
                 baseURL: nil,
                 apiKey: apiKey,

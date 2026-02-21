@@ -60,4 +60,11 @@ enum ProviderError: Error, Sendable {
 protocol TranslationProvider: Sendable {
     var id: ProviderID { get }
     func translate(_ request: ProviderRequest) async throws -> ProviderResult
+    func streamTranslate(_ request: ProviderRequest) -> AsyncThrowingStream<String, Error>?
+}
+
+extension TranslationProvider {
+    func streamTranslate(_ request: ProviderRequest) -> AsyncThrowingStream<String, Error>? {
+        nil
+    }
 }

@@ -48,12 +48,14 @@ struct PresetsCommand: ParsableCommand {
             try runWithAppErrorHandling {
                 let config = try loadConfig(self.config)
                 let preset = try PresetResolver().resolvePreset(named: name, config: config)
+                let cwd = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+                let templates = try PromptRenderer().resolvePresetTemplates(preset: preset, cwd: cwd)
 
                 print("--- SYSTEM PROMPT ---")
-                print(preset.systemPrompt ?? "")
+                print(templates.systemPrompt)
                 print("")
                 print("--- USER PROMPT ---")
-                print(preset.userPrompt ?? "")
+                print(templates.userPrompt)
             }
         }
     }

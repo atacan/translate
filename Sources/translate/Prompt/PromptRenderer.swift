@@ -10,6 +10,29 @@ struct PromptRenderContext {
 }
 
 struct PromptRenderer {
+    func resolvePresetTemplates(
+        preset: PresetDefinition,
+        cwd: URL
+    ) throws -> (systemPrompt: String, userPrompt: String) {
+        let systemTemplate = try resolveTemplate(
+            inlineOrFile: nil,
+            presetInline: preset.systemPrompt,
+            presetFile: preset.systemPromptFile,
+            cwd: cwd,
+            promptLabel: "system"
+        )
+
+        let userTemplate = try resolveTemplate(
+            inlineOrFile: nil,
+            presetInline: preset.userPrompt,
+            presetFile: preset.userPromptFile,
+            cwd: cwd,
+            promptLabel: "user"
+        )
+
+        return (systemTemplate, userTemplate)
+    }
+
     func resolvePrompts(
         preset: PresetDefinition,
         systemPromptOverride: String?,

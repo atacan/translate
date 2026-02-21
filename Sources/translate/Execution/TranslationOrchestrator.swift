@@ -70,42 +70,45 @@ struct TranslationOrchestrator {
         )
         outputPlan.warnings.forEach { terminal.warn($0.replacingOccurrences(of: "Warning: ", with: "")) }
 
-        let providerSelection = try ProviderFactory(config: config, env: env).make(
-            providerName: providerName,
-            modelOverride: options.model ?? preset.model,
-            baseURLOverride: options.baseURL,
-            apiKeyOverride: options.apiKey,
-            explicitProvider: options.provider != nil
-        )
-
-        var promptWarnings: [String] = []
         let promptRenderer = PromptRenderer()
-        let basePrompts: ResolvedPromptSet
-
-        if providerSelection.promptless {
-            basePrompts = ResolvedPromptSet(systemPrompt: "", userPrompt: "", customPromptActive: false)
-            let ignoredFlags = ignoredPromptFlags(options: options)
-            for flag in ignoredFlags {
-                terminal.warn("--\(flag) is ignored when using \(providerSelection.name). This provider does not support custom prompts.")
-            }
-        } else {
-            let resolved = try promptRenderer.resolvePrompts(
-                preset: preset,
-                systemPromptOverride: options.systemPrompt,
-                userPromptOverride: options.userPrompt,
-                cwd: cwd,
-                noLang: options.noLang
+        let resolveExecutionContext = { (requireCredentials: Bool) throws -> (ProviderSelection, ResolvedPromptSet) in
+            let providerSelection = try ProviderFactory(config: config, env: env).make(
+                providerName: providerName,
+                modelOverride: options.model ?? preset.model,
+                baseURLOverride: options.baseURL,
+                apiKeyOverride: options.apiKey,
+                explicitProvider: options.provider != nil,
+                requireCredentials: requireCredentials
             )
-            basePrompts = resolved.0
-            promptWarnings = resolved.1
-        }
 
-        for warning in promptWarnings {
-            terminal.warn(warning.replacingOccurrences(of: "Warning: ", with: ""))
+            let basePrompts: ResolvedPromptSet
+            if providerSelection.promptless {
+                basePrompts = ResolvedPromptSet(systemPrompt: "", userPrompt: "", customPromptActive: false)
+                let ignoredFlags = ignoredPromptFlags(options: options)
+                for flag in ignoredFlags {
+                    terminal.warn("--\(flag) is ignored when using \(providerSelection.name). This provider does not support custom prompts.")
+                }
+            } else {
+                let resolved = try promptRenderer.resolvePrompts(
+                    preset: preset,
+                    systemPromptOverride: options.systemPrompt,
+                    userPromptOverride: options.userPrompt,
+                    cwd: cwd,
+                    noLang: options.noLang
+                )
+                basePrompts = resolved.0
+                for warning in resolved.1 {
+                    terminal.warn(warning.replacingOccurrences(of: "Warning: ", with: ""))
+                }
+            }
+
+            return (providerSelection, basePrompts)
         }
 
         switch inputMode {
         case .inlineText(let inlineText):
+            let (providerSelection, basePrompts) = try resolveExecutionContext(!options.dryRun)
+            let format = FormatDetector.detect(formatHint: formatHint, inputFile: nil)
             let renderedPrompts = promptRenderer.render(
                 basePrompts,
                 with: PromptRenderContext(
@@ -114,7 +117,7 @@ struct TranslationOrchestrator {
                     to: to,
                     context: options.context ?? "",
                     filename: "",
-                    format: .text
+                    format: format
                 )
             )
             if options.dryRun {
@@ -137,16 +140,35 @@ struct TranslationOrchestrator {
                 prompts: renderedPrompts,
                 from: from,
                 to: to,
-                network: config.network
+                network: config.network,
+                terminal: terminal,
+                streamToStdout: outputPlan.mode.isStdout
             )
 
             let writer = OutputWriter(terminal: terminal, prompter: ConfirmationPrompter(terminal: terminal, assumeYes: assumeYes))
-            _ = try writer.write(translated.text, mode: outputPlan.mode)
+            let destination: URL?
+            if translated.streamedToStdout {
+                destination = nil
+            } else {
+                destination = try writer.write(translated.text, mode: outputPlan.mode)
+            }
             if translated.strippedFence, global.verbose {
                 terminal.info("Stripped wrapping code fence from LLM response.")
             }
+            if global.verbose {
+                emitVerboseMetadata(
+                    terminal: terminal,
+                    providerName: providerSelection.name,
+                    model: providerSelection.model,
+                    usage: translated.usage,
+                    elapsedMilliseconds: translated.elapsedMilliseconds,
+                    destination: destination
+                )
+            }
 
         case .stdin(let stdinText):
+            let (providerSelection, basePrompts) = try resolveExecutionContext(!options.dryRun)
+            let format = FormatDetector.detect(formatHint: formatHint, inputFile: nil)
             let renderedPrompts = promptRenderer.render(
                 basePrompts,
                 with: PromptRenderContext(
@@ -155,7 +177,7 @@ struct TranslationOrchestrator {
                     to: to,
                     context: options.context ?? "",
                     filename: "",
-                    format: .text
+                    format: format
                 )
             )
             if options.dryRun {
@@ -178,13 +200,30 @@ struct TranslationOrchestrator {
                 prompts: renderedPrompts,
                 from: from,
                 to: to,
-                network: config.network
+                network: config.network,
+                terminal: terminal,
+                streamToStdout: outputPlan.mode.isStdout
             )
 
             let writer = OutputWriter(terminal: terminal, prompter: ConfirmationPrompter(terminal: terminal, assumeYes: assumeYes))
-            _ = try writer.write(translated.text, mode: outputPlan.mode)
+            let destination: URL?
+            if translated.streamedToStdout {
+                destination = nil
+            } else {
+                destination = try writer.write(translated.text, mode: outputPlan.mode)
+            }
             if translated.strippedFence, global.verbose {
                 terminal.info("Stripped wrapping code fence from LLM response.")
+            }
+            if global.verbose {
+                emitVerboseMetadata(
+                    terminal: terminal,
+                    providerName: providerSelection.name,
+                    model: providerSelection.model,
+                    usage: translated.usage,
+                    elapsedMilliseconds: translated.elapsedMilliseconds,
+                    destination: destination
+                )
             }
 
         case .files(let files, _):
@@ -207,8 +246,10 @@ struct TranslationOrchestrator {
 
             if validInspections.isEmpty && catalogFiles.isEmpty {
                 if !immediateErrors.isEmpty { throw AppError.runtime("One or more files failed.") }
-                throw AppError.runtime("Error: Input text is empty.")
+                return
             }
+
+            let (providerSelection, basePrompts) = try resolveExecutionContext(!options.dryRun)
 
             let destinationMap: [ResolvedInputFile: URL] = {
                 switch outputPlan.mode {
@@ -266,11 +307,14 @@ struct TranslationOrchestrator {
                     )
                     return
                 }
-
-                throw AppError.runtime("Error: Input text is empty.")
+                return
             }
 
-            let writer = OutputWriter(terminal: terminal, prompter: ConfirmationPrompter(terminal: terminal, assumeYes: assumeYes))
+            let writer = OutputWriter(
+                terminal: terminal,
+                prompter: ConfirmationPrompter(terminal: terminal, assumeYes: assumeYes),
+                skipOverwriteConfirmation: outputPlan.mode.isInPlacePerFile
+            )
             var results = immediateErrors
 
             if !catalogFiles.isEmpty {
@@ -305,6 +349,8 @@ struct TranslationOrchestrator {
                     outputMode: outputPlan.mode,
                     destinationMap: destinationMap,
                     writer: writer,
+                    providerName: providerSelection.name,
+                    model: providerSelection.model,
                     verbose: global.verbose,
                     terminal: terminal,
                     network: config.network
@@ -324,6 +370,8 @@ struct TranslationOrchestrator {
                         outputMode: outputPlan.mode,
                         destinationMap: destinationMap,
                         writer: writer,
+                        providerName: providerSelection.name,
+                        model: providerSelection.model,
                         verbose: global.verbose,
                         terminal: terminal,
                         network: config.network
@@ -361,6 +409,8 @@ struct TranslationOrchestrator {
         outputMode: OutputMode,
         destinationMap: [ResolvedInputFile: URL],
         writer: OutputWriter,
+        providerName: String,
+        model: String?,
         verbose: Bool,
         terminal: TerminalIO,
         network: NetworkRuntimeConfig
@@ -389,26 +439,53 @@ struct TranslationOrchestrator {
                 prompts: renderedPrompts,
                 from: from,
                 to: to,
-                network: network
+                network: network,
+                terminal: terminal,
+                streamToStdout: outputMode.isStdout
             )
             if result.strippedFence, verbose {
                 terminal.info("Stripped wrapping code fence from LLM response.")
             }
 
+            let destination: URL?
             switch outputMode {
             case .stdout:
-                terminal.writeStdout(result.text)
-                return TranslationFileResult(file: inspection.file, destination: nil, success: true, errorMessage: nil)
+                if !result.streamedToStdout {
+                    terminal.writeStdout(result.text)
+                }
+                destination = nil
             case .singleFile(let file):
                 try writer.writeFile(text: result.text, destination: file)
-                return TranslationFileResult(file: inspection.file, destination: file, success: true, errorMessage: nil)
+                destination = file
             case .perFile:
                 guard let destination = destinationMap[inspection.file] else {
                     return TranslationFileResult(file: inspection.file, destination: nil, success: false, errorMessage: "No output target was planned for this file.")
                 }
                 try writer.writeFile(text: result.text, destination: destination)
+                if verbose {
+                    emitVerboseMetadata(
+                        terminal: terminal,
+                        providerName: providerName,
+                        model: model,
+                        usage: result.usage,
+                        elapsedMilliseconds: result.elapsedMilliseconds,
+                        destination: destination
+                    )
+                }
                 return TranslationFileResult(file: inspection.file, destination: destination, success: true, errorMessage: nil)
             }
+
+            if verbose {
+                emitVerboseMetadata(
+                    terminal: terminal,
+                    providerName: providerName,
+                    model: model,
+                    usage: result.usage,
+                    elapsedMilliseconds: result.elapsedMilliseconds,
+                    destination: destination
+                )
+            }
+            return TranslationFileResult(file: inspection.file, destination: destination, success: true, errorMessage: nil)
         } catch let providerError as ProviderError {
             return TranslationFileResult(file: inspection.file, destination: nil, success: false, errorMessage: providerError.message)
         } catch {
@@ -432,22 +509,51 @@ struct TranslationOrchestrator {
         prompts: ResolvedPromptSet,
         from: NormalizedLanguage,
         to: NormalizedLanguage,
-        network: NetworkRuntimeConfig
-    ) async throws -> (text: String, strippedFence: Bool) {
-        let response = try await provider.translate(
-            ProviderRequest(
-                from: from,
-                to: to,
-                systemPrompt: prompts.systemPrompt,
-                userPrompt: prompts.userPrompt,
-                text: sourceText,
-                timeoutSeconds: network.timeoutSeconds,
-                network: network
-            )
+        network: NetworkRuntimeConfig,
+        terminal: TerminalIO,
+        streamToStdout: Bool
+    ) async throws -> TranslationExecutionResult {
+        let providerRequest = ProviderRequest(
+            from: from,
+            to: to,
+            systemPrompt: prompts.systemPrompt,
+            userPrompt: prompts.userPrompt,
+            text: sourceText,
+            timeoutSeconds: network.timeoutSeconds,
+            network: network
         )
 
+        if streamToStdout, let stream = provider.streamTranslate(providerRequest) {
+            let startedAt = Date()
+            var aggregated = ""
+            for try await chunk in stream {
+                terminal.writeStdout(chunk, terminator: "")
+                aggregated += chunk
+            }
+            if !aggregated.hasSuffix("\n") {
+                terminal.writeStdout("", terminator: "\n")
+            }
+            let elapsed = Int(Date().timeIntervalSince(startedAt) * 1000)
+            return TranslationExecutionResult(
+                text: aggregated,
+                strippedFence: false,
+                usage: nil,
+                elapsedMilliseconds: elapsed,
+                streamedToStdout: true
+            )
+        }
+
+        let startedAt = Date()
+        let response = try await provider.translate(providerRequest)
+        let elapsed = Int(Date().timeIntervalSince(startedAt) * 1000)
         let sanitized = ResponseSanitizer.stripWrappingCodeFence(response.text)
-        return (text: sanitized.text, strippedFence: sanitized.stripped)
+        return TranslationExecutionResult(
+            text: sanitized.text,
+            strippedFence: sanitized.stripped,
+            usage: response.usage,
+            elapsedMilliseconds: elapsed,
+            streamedToStdout: false
+        )
     }
 
     private func translateFilesConcurrently(
@@ -463,6 +569,8 @@ struct TranslationOrchestrator {
         outputMode: OutputMode,
         destinationMap: [ResolvedInputFile: URL],
         writer: OutputWriter,
+        providerName: String,
+        model: String?,
         verbose: Bool,
         terminal: TerminalIO,
         network: NetworkRuntimeConfig
@@ -475,7 +583,7 @@ struct TranslationOrchestrator {
         }
 
         enum TaskOutput: Sendable {
-            case success(text: String, strippedFence: Bool)
+            case success(text: String, strippedFence: Bool, usage: UsageInfo?, elapsedMilliseconds: Int)
             case failure(String)
         }
 
@@ -505,6 +613,7 @@ struct TranslationOrchestrator {
                     group.addTask {
                         let output: TaskOutput
                         do {
+                            let startedAt = Date()
                             let response = try await provider.translate(
                                 ProviderRequest(
                                     from: from,
@@ -516,8 +625,14 @@ struct TranslationOrchestrator {
                                     network: network
                                 )
                             )
+                            let elapsed = Int(Date().timeIntervalSince(startedAt) * 1000)
                             let sanitized = ResponseSanitizer.stripWrappingCodeFence(response.text)
-                            output = .success(text: sanitized.text, strippedFence: sanitized.stripped)
+                            output = .success(
+                                text: sanitized.text,
+                                strippedFence: sanitized.stripped,
+                                usage: response.usage,
+                                elapsedMilliseconds: elapsed
+                            )
                         } catch let providerError as ProviderError {
                             output = .failure(providerError.message)
                         } catch {
@@ -534,6 +649,7 @@ struct TranslationOrchestrator {
                     group.addTask {
                         let output: TaskOutput
                         do {
+                            let startedAt = Date()
                             let response = try await provider.translate(
                                 ProviderRequest(
                                     from: from,
@@ -545,8 +661,14 @@ struct TranslationOrchestrator {
                                     network: network
                                 )
                             )
+                            let elapsed = Int(Date().timeIntervalSince(startedAt) * 1000)
                             let sanitized = ResponseSanitizer.stripWrappingCodeFence(response.text)
-                            output = .success(text: sanitized.text, strippedFence: sanitized.stripped)
+                            output = .success(
+                                text: sanitized.text,
+                                strippedFence: sanitized.stripped,
+                                usage: response.usage,
+                                elapsedMilliseconds: elapsed
+                            )
                         } catch let providerError as ProviderError {
                             output = .failure(providerError.message)
                         } catch {
@@ -568,26 +690,60 @@ struct TranslationOrchestrator {
             switch output {
             case .failure(let errorMessage):
                 results.append(TranslationFileResult(file: inspection.file, destination: nil, success: false, errorMessage: errorMessage))
-            case .success(let text, let strippedFence):
+            case .success(let text, let strippedFence, let usage, let elapsedMilliseconds):
                 if strippedFence, verbose {
                     terminal.info("Stripped wrapping code fence from LLM response.")
                 }
                 do {
+                    let destination: URL?
                     switch outputMode {
                     case .stdout:
                         terminal.writeStdout(text)
-                        results.append(TranslationFileResult(file: inspection.file, destination: nil, success: true, errorMessage: nil))
+                        destination = nil
                     case .singleFile(let destination):
                         try writer.writeFile(text: text, destination: destination)
+                        if verbose {
+                            emitVerboseMetadata(
+                                terminal: terminal,
+                                providerName: providerName,
+                                model: model,
+                                usage: usage,
+                                elapsedMilliseconds: elapsedMilliseconds,
+                                destination: destination
+                            )
+                        }
                         results.append(TranslationFileResult(file: inspection.file, destination: destination, success: true, errorMessage: nil))
+                        continue
                     case .perFile:
                         guard let destination = destinationMap[inspection.file] else {
                             results.append(TranslationFileResult(file: inspection.file, destination: nil, success: false, errorMessage: "No output target was planned for this file."))
                             continue
                         }
                         try writer.writeFile(text: text, destination: destination)
+                        if verbose {
+                            emitVerboseMetadata(
+                                terminal: terminal,
+                                providerName: providerName,
+                                model: model,
+                                usage: usage,
+                                elapsedMilliseconds: elapsedMilliseconds,
+                                destination: destination
+                            )
+                        }
                         results.append(TranslationFileResult(file: inspection.file, destination: destination, success: true, errorMessage: nil))
+                        continue
                     }
+                    if verbose {
+                        emitVerboseMetadata(
+                            terminal: terminal,
+                            providerName: providerName,
+                            model: model,
+                            usage: usage,
+                            elapsedMilliseconds: elapsedMilliseconds,
+                            destination: destination
+                        )
+                    }
+                    results.append(TranslationFileResult(file: inspection.file, destination: destination, success: true, errorMessage: nil))
                 } catch {
                     results.append(TranslationFileResult(file: inspection.file, destination: nil, success: false, errorMessage: error.localizedDescription))
                 }
@@ -595,5 +751,50 @@ struct TranslationOrchestrator {
         }
 
         return results
+    }
+
+    private func emitVerboseMetadata(
+        terminal: TerminalIO,
+        providerName: String,
+        model: String?,
+        usage: UsageInfo?,
+        elapsedMilliseconds: Int,
+        destination: URL?
+    ) {
+        terminal.info("Provider: \(providerName)")
+        terminal.info("Model: \(model ?? "(provider default)")")
+        if let usage {
+            let input = usage.inputTokens.map(String.init) ?? "n/a"
+            let output = usage.outputTokens.map(String.init) ?? "n/a"
+            terminal.info("Tokens: input=\(input), output=\(output)")
+        } else {
+            terminal.info("Tokens: unavailable")
+        }
+        terminal.info("Elapsed: \(elapsedMilliseconds)ms")
+        terminal.info("Output: \(destination?.path ?? "stdout")")
+    }
+}
+
+private struct TranslationExecutionResult {
+    let text: String
+    let strippedFence: Bool
+    let usage: UsageInfo?
+    let elapsedMilliseconds: Int
+    let streamedToStdout: Bool
+}
+
+private extension OutputMode {
+    var isStdout: Bool {
+        if case .stdout = self {
+            return true
+        }
+        return false
+    }
+
+    var isInPlacePerFile: Bool {
+        if case .perFile(_, let inPlace) = self {
+            return inPlace
+        }
+        return false
     }
 }
