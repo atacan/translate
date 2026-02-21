@@ -11,6 +11,7 @@ let package = Package(
     dependencies: [
         .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.7.0"),
         .package(url: "https://github.com/mattt/AnyLanguageModel.git", from: "0.7.1"),
+        .package(url: "https://github.com/atacan/UsefulThings.git", branch: "main"),
         .package(path: "../StringCatalogKit"),
         .package(url: "https://github.com/LebJe/TOMLKit.git", from: "0.6.0"),
         .package(url: "https://github.com/davbeck/swift-glob.git", from: "1.0.0"),
@@ -26,6 +27,7 @@ let package = Package(
                 .product(name: "CatalogTranslationLLM", package: "StringCatalogKit"),
                 .product(name: "TOMLKit", package: "TOMLKit"),
                 .product(name: "Glob", package: "swift-glob"),
+                .product(name: "UsefulThings", package: "UsefulThings"),
             ]
         ),
     ]

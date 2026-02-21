@@ -1,5 +1,5 @@
 {
-  "originHash" : "cfcd9b580b8a9a27862f61c3abe4710537c528b0056d2d55c40f95ec6ab980b2",
+  "originHash" : "e4c2f3048e9221eb9cea1f8d687dd6a76b599aa7a9cd38b60a7e1fbca5f0a079",
   "pins" : [
     {
       "identity" : "anylanguagemodel",
@@ -80,6 +80,15 @@
       "state" : {
         "revision" : "ec6198d37d495efc6acd4dffbd262cdca7ff9b3f",
         "version" : "0.6.0"
+      }
+    },
+    {
+      "identity" : "usefulthings",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/atacan/UsefulThings.git",
+      "state" : {
+        "branch" : "main",
+        "revision" : "8ba0a33fd20e7ed29d27b58ef5af23c61bc3a60b"
       }
     }
   ],

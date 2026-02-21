@@ -20,8 +20,8 @@ Plan impact: adopt repo/toolchain reality (`macOS 26`, `AnyLanguageModel.SystemL
 | Config | `ConfigLocator`, `ConfigStore`, `ConfigResolver`, `ConfigKeyPath` | Resolve config path (`--config` > `TRANSLATE_CONFIG` > default), load/save TOML, dot-key get/set/unset | `TOMLKit` |
 | Input/Output Planning | `InputResolver`, `GlobExpander`, `FileInspector`, `OutputPlanner` | Detect input mode, expand globs, validate files, compute output behavior | `Glob`, Foundation |
 | Prompting | `BuiltInPresetStore`, `PresetResolver`, `PromptRenderer`, `PromptFileValidator`, `DryRunPrinter` | Template resolution, placeholder substitution, startup prompt-file validation, exact dry-run rendering | Foundation |
-| Provider Core | `ProviderRequest`, `ProviderResult`, `TranslationProvider`, `ProviderFactory` | Provider-agnostic contract with language direction and metadata | Foundation |
-| Provider HTTP Transport | `HTTPClient`, `RetryPolicy`, `OpenAIClient`, `AnthropicClient`, `OllamaClient`, `OpenAICompatibleClient` | Direct HTTP for strict status/header-aware retry and timeout behavior | `URLSession` |
+| Provider Core | `ProviderRequest`, `ProviderResult`, `ProviderError`, `TranslationProvider`, `ProviderFactory` | Provider-agnostic contract with language direction and deterministic failure metadata | Foundation |
+| Provider HTTP Transport | `HTTPClient`, `RetryPolicy`, `OpenAIClient`, `AnthropicClient`, `OllamaClient`, `OpenAICompatibleClient` | Direct HTTP for strict status/header-aware retry and timeout behavior | `URLSession`, `UsefulThings` (`withRetry`) |
 | Apple Providers | `AppleIntelligenceProvider`, `AppleTranslateProvider` | macOS-only providers and OS gating | `AnyLanguageModel` (Apple Intelligence), Apple Translation framework |
 | Catalog Workflow | `CatalogWorkflow`, `CatalogBridge` | `.xcstrings` routing and translation using actual `StringCatalogKit` API | `StringCatalog`, `CatalogTranslation`, `CatalogTranslationLLM` |
 | Diagnostics/Parity | `WarningEmitter`, `VerboseEmitter`, `SpecAssertionMatrix` | Warning policy, verbose info policy, spec-parity checklist assertions | Foundation |
@@ -66,6 +66,7 @@ Sources/translate/
     HTTP/
       HTTPClient.swift
       RetryPolicy.swift
+      RetryAdapter.swift
       OpenAIClient.swift
       AnthropicClient.swift
       OllamaClient.swift
@@ -97,6 +98,8 @@ Tests/translateTests/
   ProviderFactoryTests.swift
   RetryPolicyTests.swift
   StreamingTests.swift
+  ConfigEditTests.swift
+  HelpSnapshotTests.swift
   CatalogWorkflowTests.swift
   SpecAssertionTests.swift
 ```
@@ -295,6 +298,7 @@ Implement provider abstraction and provider factory with metadata-aware contract
 - Implement Apple Intelligence provider using `AnyLanguageModel.SystemLanguageModel`.
 - Implement Apple Translate provider as prompt-less path.
 - Implement provider selection and `--base-url` rules.
+- Define typed `ProviderError` carrying status/headers/body and classify retryability deterministically.
 
 **Small Swift snippets**
 ```swift
@@ -317,9 +321,18 @@ struct ProviderResult: Sendable {
 ```
 
 ```swift
+enum ProviderError: Error, Sendable {
+    case http(statusCode: Int, headers: [String: String], body: String)
+    case timeout(seconds: Int)
+    case invalidResponse(String)
+    case transport(String)
+}
+```
+
+```swift
 protocol TranslationProvider: Sendable {
     var id: ProviderID { get }
-    func translate(_ request: ProviderRequest) async throws -> ProviderResult
+    func translate(_ request: ProviderRequest) async throws(ProviderError) -> ProviderResult
 }
 ```
 
@@ -336,11 +349,12 @@ Implement runtime orchestration: retries, timeout, streaming, sanitization, and 
 
 **Concrete tasks**
 - Build orchestration for single/multi-file runs and summary reporting.
-- Implement retry policy using status/header data from HTTP transport.
+- Implement retry policy in `HTTPClient` via `UsefulThings.withRetry` wrapper.
 - Respect `Retry-After` header and context-window non-retry behavior.
 - Add stdout streaming with cumulative-snapshot delta handling.
 - Add buffered writes for file outputs.
 - Implement fence stripping and non-TTY confirmation abort semantics.
+- Keep request timeout per attempt (outside the overall retry loop), matching spec wording.
 
 **Small Swift snippets**
 ```swift
@@ -359,10 +373,23 @@ if let retryAfter = response.headers["Retry-After"] {
 }
 ```
 
+```swift
+let retryConfig = RetryConfiguration(
+    maxAttempts: retries + 1,       // spec retries=3 => 4 total attempts
+    initialDelay: .seconds(1),
+    maxDelay: .seconds(30),
+    backoffMultiplier: 2.0,
+    jitterFactor: 0.2
+)
+```
+
 **Validation/tests to run**
 - `swift test --filter RetryPolicyTests`
 - `swift test --filter StreamingTests`
 - CI-style non-TTY integration tests for confirmation flow.
+- Retry tests proving only 429/500/502/503/504 are retried.
+- Retry tests proving `Retry-After` overrides computed delay.
+- Timeout tests proving timeout is per request attempt, not whole sequence.
 
 **Exit criteria**
 - No duplicate streamed output; retry policy follows spec.
@@ -376,6 +403,7 @@ Complete `config` and `presets` subcommands.
 - Implement `presets list/show/which`.
 - Ensure `presets show` keeps placeholders intact.
 - Ensure named-endpoint collision warning is emitted at config load time.
+- Implement `config edit` fallback chain and tests: `$EDITOR` -> `vi` (Unix/macOS) / `notepad` (Windows).
 
 **Small Swift snippets**
 ```swift
@@ -393,6 +421,7 @@ if builtInProviderNames.contains(endpointName) {
 
 **Validation/tests to run**
 - `swift test --filter CLITests`
+- `swift test --filter ConfigEditTests`
 - Snapshot tests for `presets list/show/which`.
 
 **Exit criteria**
@@ -443,6 +472,7 @@ Add incremental spec assertion gate and release-readiness checks.
 - Create `notes/spec-assertion-checklist.md` (error text, warning text, exit codes, dry-run layout).
 - Add `SpecAssertionTests` mapped to each checklist entry.
 - Run behavior scenarios from spec Section 12.
+- Add full `--help` snapshot parity tests (root + `config` + `presets` help output).
 
 **Small Swift snippets**
 ```swift
@@ -456,6 +486,7 @@ let checklistStatus = ["§11.1-verbose-quiet-conflict": "PASS"]
 
 **Validation/tests to run**
 - `swift test`
+- `swift test --filter HelpSnapshotTests`
 - Manual smoke for help/version/subcommands.
 
 **Exit criteria**
@@ -472,19 +503,22 @@ Recommendation: document codebase baseline as macOS 26 and track as spec deviati
 3. Retry/timeout observability with AnyLanguageModel for HTTP providers  
 Recommendation: use direct HTTP clients for those providers; keep AnyLanguageModel for Apple Intelligence only.
 
-4. Streaming snapshot semantics (cumulative content)  
+4. Deterministic retry decisions require typed transport errors  
+Recommendation: enforce `ProviderError.http(statusCode:headers:body:)` so retry policy is purely data-driven.
+
+5. Streaming snapshot semantics (cumulative content)  
 Recommendation: always emit delta from last character count when writing to stdout.
 
-5. Glob zero-match exit code classification  
+6. Glob zero-match exit code classification  
 Recommendation: treat as runtime/input failure (`1`), not argument conflict (`2`).
 
-6. Dynamic TOML key structure (`openai-compatible` + named children)  
+7. Dynamic TOML key structure (`openai-compatible` + named children)  
 Recommendation: hybrid typed model + `TOMLTable` traversal for dynamic branches.
 
-7. Language normalization coverage (name/ISO/BCP47)  
+8. Language normalization coverage (name/ISO/BCP47)  
 Recommendation: implement dedicated normalizer using Foundation locale APIs plus a curated alias table; do not rely on `StringCatalogKit` language enum for CLI parsing.
 
-8. Token usage in verbose output may be unavailable per provider  
+9. Token usage in verbose output may be unavailable per provider  
 Recommendation: emit usage when available; otherwise print `token usage: unavailable`.
 
 ## 6) “DeepL later” placeholder plan (where it will plug in)
