@@ -23,7 +23,11 @@ tap_dir="$(mktemp -d)"
 trap 'rm -rf "$tap_dir"' EXIT
 
 echo "==> Cloning tap ${TAP_REPO}"
-gh repo clone "$TAP_REPO" "$tap_dir" -- --depth 1
+if [[ -n "${GH_TOKEN:-}" ]]; then
+  git clone "https://x-access-token:${GH_TOKEN}@github.com/${TAP_REPO}.git" "$tap_dir" --depth 1
+else
+  gh repo clone "$TAP_REPO" "$tap_dir" -- --depth 1
+fi
 mkdir -p "${tap_dir}/Formula"
 
 cat > "${tap_dir}/Formula/${NAME}.rb" <<RUBY
