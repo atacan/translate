@@ -179,10 +179,29 @@ struct ProviderFactory {
             return ProviderSelection(name: id.rawValue, id: id, provider: AppleTranslateProvider(), model: nil, baseURL: nil, apiKey: nil, promptless: true, warnings: [])
 
         case .deepl:
-            if !MilestoneScope.deepLEnabled {
-                throw AppError.runtime("Error: Provider 'deepl' is deferred for this milestone.")
+            if modelOverride != nil {
+                throw AppError.invalidArguments("--model is not applicable for deepl. This provider does not use a model.")
             }
-            throw AppError.runtime("Error: Provider 'deepl' is not implemented yet.")
+            if explicitProvider && baseURLOverride != nil {
+                throw AppError.invalidArguments("--base-url cannot be used with --provider deepl. It is only valid for openai-compatible providers.")
+            }
+
+            let cfg = config.providers[id.rawValue]
+            let apiKey = apiKeyOverride ?? cfg?.apiKey ?? env["DEEPL_API_KEY"]
+            guard let apiKey, !apiKey.isEmpty else {
+                throw AppError.runtime("Error: DEEPL_API_KEY is required for provider 'deepl'.")
+            }
+
+            return ProviderSelection(
+                name: id.rawValue,
+                id: id,
+                provider: DeepLProvider(apiKey: apiKey),
+                model: nil,
+                baseURL: nil,
+                apiKey: apiKey,
+                promptless: true,
+                warnings: []
+            )
         }
     }
 }

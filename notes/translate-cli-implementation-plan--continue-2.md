@@ -264,16 +264,16 @@ Exit criteria:
 
 ---
 
-## Phase 9 (blocked): DeepL integration when package is ready
+## Phase 9: DeepL integration
 
 Status:
-Blocked pending external DeepL package readiness.
+Completed on 2026-02-21.
 
-Tasks after unblock:
+Completed tasks:
 1. Implement `DeepLProvider` behind existing provider contract.
 2. Add prompt-less provider semantics and warnings for DeepL.
 3. Wire API key precedence (`--api-key` > config > `DEEPL_API_KEY`).
-4. Add retry/timeout behavior through shared HTTP client.
+4. Add retry/timeout behavior aligned with existing provider retry semantics.
 5. Add DeepL-specific tests and scenario coverage.
 6. Mark Section 7 parity complete in `spec_parity.md`.
 
@@ -297,6 +297,6 @@ Exit criteria:
 6. Phase 6
 7. Phase 7
 8. Phase 8
-9. Phase 9 (only when DeepL package unblocks)
+9. Phase 9
 
 This order minimizes rework: core UX + validation first, then provider/runtime stability, then catalog integration, then full parity gate, then DeepL finalization.

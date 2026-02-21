@@ -1,9 +1,5 @@
 import Foundation
 
-enum MilestoneScope {
-    static let deepLEnabled = false
-}
-
 enum PlatformBaseline {
     static let minimumMacOSMajor = 26
 }

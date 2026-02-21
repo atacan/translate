@@ -14,10 +14,13 @@ struct ConfigCommand: ParsableCommand {
         var config: String?
 
         mutating func run() throws {
-            let path = resolveConfigPath(config)
-            let table = try ConfigStore().load(path: path)
-            let resolved = ConfigResolver().resolve(path: path, table: table)
-            print(ConfigResolver().effectiveConfigTable(resolved).convert(to: .toml))
+            try runWithAppErrorHandling {
+                let path = resolveConfigPath(config)
+                let table = try ConfigStore().load(path: path)
+                let resolved = ConfigResolver().resolve(path: path, table: table)
+                emitNamedProviderCollisionWarnings(config: resolved)
+                print(ConfigResolver().effectiveConfigTable(resolved).convert(to: .toml))
+            }
         }
     }
 
@@ -38,12 +41,16 @@ struct ConfigCommand: ParsableCommand {
         @Argument var key: String
 
         mutating func run() throws {
-            let path = resolveConfigPath(config)
-            let table = try ConfigStore().load(path: path)
-            guard let value = ConfigKeyPath.get(table: table, key: key) else {
-                throw AppError.runtime("Error: Key '\(key)' not found.")
+            try runWithAppErrorHandling {
+                let path = resolveConfigPath(config)
+                let table = try ConfigStore().load(path: path)
+                let resolved = ConfigResolver().resolve(path: path, table: table)
+                emitNamedProviderCollisionWarnings(config: resolved)
+                guard let value = ConfigKeyPath.get(table: table, key: key) else {
+                    throw AppError.runtime("Key '\(key)' not found.")
+                }
+                print(ConfigKeyPath.toPrintable(value))
             }
-            print(ConfigKeyPath.toPrintable(value))
         }
     }
 
@@ -55,11 +62,15 @@ struct ConfigCommand: ParsableCommand {
         @Argument var value: String
 
         mutating func run() throws {
-            let path = resolveConfigPath(config)
-            let store = ConfigStore()
-            let table = try store.load(path: path)
-            ConfigKeyPath.set(table: table, key: key, value: ConfigKeyPath.parseScalar(value))
-            try store.save(table: table, path: path)
+            try runWithAppErrorHandling {
+                let path = resolveConfigPath(config)
+                let store = ConfigStore()
+                let table = try store.load(path: path)
+                let resolved = ConfigResolver().resolve(path: path, table: table)
+                emitNamedProviderCollisionWarnings(config: resolved)
+                ConfigKeyPath.set(table: table, key: key, value: ConfigKeyPath.parseScalar(value))
+                try store.save(table: table, path: path)
+            }
         }
     }
 
@@ -70,11 +81,15 @@ struct ConfigCommand: ParsableCommand {
         @Argument var key: String
 
         mutating func run() throws {
-            let path = resolveConfigPath(config)
-            let store = ConfigStore()
-            let table = try store.load(path: path)
-            _ = ConfigKeyPath.unset(table: table, key: key)
-            try store.save(table: table, path: path)
+            try runWithAppErrorHandling {
+                let path = resolveConfigPath(config)
+                let store = ConfigStore()
+                let table = try store.load(path: path)
+                let resolved = ConfigResolver().resolve(path: path, table: table)
+                emitNamedProviderCollisionWarnings(config: resolved)
+                _ = ConfigKeyPath.unset(table: table, key: key)
+                try store.save(table: table, path: path)
+            }
         }
     }
 
@@ -83,26 +98,46 @@ struct ConfigCommand: ParsableCommand {
         var config: String?
 
         mutating func run() throws {
-            let path = resolveConfigPath(config)
-            let store = ConfigStore()
-            let table = try store.load(path: path)
-            try store.save(table: table, path: path)
+            try runWithAppErrorHandling {
+                let path = resolveConfigPath(config)
+                let store = ConfigStore()
+                let table = try store.load(path: path)
+                let resolved = ConfigResolver().resolve(path: path, table: table)
+                emitNamedProviderCollisionWarnings(config: resolved)
+                try store.save(table: table, path: path)
 
-            #if os(Windows)
-            let fallbackEditor = "notepad"
-            #else
-            let fallbackEditor = "vi"
-            #endif
-            let editor = ProcessInfo.processInfo.environment["EDITOR"] ?? fallbackEditor
+                #if os(Windows)
+                let fallbackEditor = "notepad"
+                #else
+                let fallbackEditor = "vi"
+                #endif
+                let editor = ProcessInfo.processInfo.environment["EDITOR"] ?? fallbackEditor
 
-            let process = Process()
-            process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-            process.arguments = [editor, path.path]
-            try process.run()
-            process.waitUntilExit()
-            if process.terminationStatus != 0 {
-                throw AppError.runtime("Error: editor exited with status \(process.terminationStatus).")
+                let process = Process()
+                process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+                process.arguments = [editor, path.path]
+                try process.run()
+                process.waitUntilExit()
+                if process.terminationStatus != 0 {
+                    throw AppError.runtime("editor exited with status \(process.terminationStatus).")
+                }
             }
         }
+    }
+}
+
+private func emitNamedProviderCollisionWarnings(config: ResolvedConfig) {
+    let terminal = TerminalIO(quiet: false, verbose: false)
+    for warning in ConfigResolver().namedProviderCollisionWarnings(config) {
+        terminal.warn(warning.replacingOccurrences(of: "Warning: ", with: ""))
+    }
+}
+
+private func runWithAppErrorHandling(_ body: () throws -> Void) throws {
+    do {
+        try body()
+    } catch let appError as AppError {
+        TerminalIO(quiet: false, verbose: false).error(appError.message)
+        throw ExitCode(appError.exitCode.rawValue)
     }
 }

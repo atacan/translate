@@ -65,7 +65,29 @@ final class ProviderFactoryTests: XCTestCase {
         }
     }
 
-    func testDeepLIsDeferred() {
+    func testDeepLRejectsModelOverride() {
+        let factory = ProviderFactory(config: makeConfig(), env: [:])
+        XCTAssertThrowsError(
+            try factory.make(
+                providerName: ProviderID.deepl.rawValue,
+                modelOverride: "model-x",
+                baseURLOverride: nil,
+                apiKeyOverride: nil,
+                explicitProvider: true
+            )
+        ) { error in
+            guard let appError = error as? AppError else {
+                return XCTFail("Expected AppError.")
+            }
+            XCTAssertEqual(
+                appError.message,
+                "--model is not applicable for deepl. This provider does not use a model."
+            )
+            XCTAssertEqual(appError.exitCode, .invalidArguments)
+        }
+    }
+
+    func testDeepLRequiresAPIKey() {
         let factory = ProviderFactory(config: makeConfig(), env: [:])
         XCTAssertThrowsError(
             try factory.make(
@@ -79,12 +101,55 @@ final class ProviderFactoryTests: XCTestCase {
             guard let appError = error as? AppError else {
                 return XCTFail("Expected AppError.")
             }
-            XCTAssertEqual(appError.message, "Error: Provider 'deepl' is deferred for this milestone.")
+            XCTAssertEqual(appError.message, "Error: DEEPL_API_KEY is required for provider 'deepl'.")
             XCTAssertEqual(appError.exitCode, .runtimeError)
         }
     }
 
-    private func makeConfig() -> ResolvedConfig {
+    func testDeepLUsesCLIAPIKeyPrecedence() throws {
+        let config = makeConfig(
+            providers: [
+                ProviderID.deepl.rawValue: ProviderConfigEntry(baseURL: nil, model: nil, apiKey: "config-key"),
+            ]
+        )
+        let factory = ProviderFactory(config: config, env: ["DEEPL_API_KEY": "env-key"])
+
+        let selection = try factory.make(
+            providerName: ProviderID.deepl.rawValue,
+            modelOverride: nil,
+            baseURLOverride: nil,
+            apiKeyOverride: "cli-key",
+            explicitProvider: true
+        )
+
+        XCTAssertEqual(selection.provider.id, .deepl)
+        XCTAssertEqual(selection.apiKey, "cli-key")
+        XCTAssertTrue(selection.promptless)
+        XCTAssertNil(selection.model)
+    }
+
+    func testDeepLRejectsBaseURL() {
+        let factory = ProviderFactory(config: makeConfig(), env: ["DEEPL_API_KEY": "key"])
+        XCTAssertThrowsError(
+            try factory.make(
+                providerName: ProviderID.deepl.rawValue,
+                modelOverride: nil,
+                baseURLOverride: "https://example.com",
+                apiKeyOverride: nil,
+                explicitProvider: true
+            )
+        ) { error in
+            guard let appError = error as? AppError else {
+                return XCTFail("Expected AppError.")
+            }
+            XCTAssertEqual(
+                appError.message,
+                "--base-url cannot be used with --provider deepl. It is only valid for openai-compatible providers."
+            )
+        }
+    }
+
+    private func makeConfig(providers: [String: ProviderConfigEntry] = [:]) -> ResolvedConfig {
         ResolvedConfig(
             path: URL(fileURLWithPath: "/tmp/config.toml"),
             table: TOMLTable(),
@@ -96,7 +161,7 @@ final class ProviderFactoryTests: XCTestCase {
             defaultsYes: false,
             defaultsJobs: 1,
             network: NetworkRuntimeConfig(timeoutSeconds: 120, retries: 3, retryBaseDelaySeconds: 1),
-            providers: [:],
+            providers: providers,
             namedOpenAICompatible: [:],
             presets: [:]
         )

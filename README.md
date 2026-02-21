@@ -87,12 +87,18 @@ translate config set providers.openai-compatible.lmstudio.model llama3.1
 translate --provider lmstudio --text --to en "Merhaba dunya"
 ```
 
+### DeepL
+
+```bash
+export DEEPL_API_KEY="your_api_key"
+translate --provider deepl --text --to en "Merhaba dunya"
+```
+
 Notes:
 
 - `--base-url` without `--provider` automatically uses `openai-compatible`.
 - `--provider openai` and `--base-url` cannot be used together.
 - `apple-translate` and `apple-intelligence` are available on macOS 26+.
-- `deepl` remains deferred for this milestone.
 
 ## Input Modes
 

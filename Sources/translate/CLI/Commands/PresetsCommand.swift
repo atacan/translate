@@ -13,25 +13,28 @@ struct PresetsCommand: ParsableCommand {
         var config: String?
 
         mutating func run() throws {
-            let config = try loadConfig(self.config)
-            let resolver = PresetResolver()
-            let grouped = resolver.list(config: config)
-            let active = resolver.activePresetName(cliPreset: nil, config: config)
+            try runWithAppErrorHandling {
+                let config = try loadConfig(self.config)
+                let resolver = PresetResolver()
+                let grouped = resolver.list(config: config)
+                let active = resolver.activePresetName(cliPreset: nil, config: config)
 
-            print("BUILT-IN PRESETS")
-            for preset in grouped.builtIn {
-                let marker = preset.name == active ? "*" : " "
-                print("  \(preset.name.padding(toLength: 14, withPad: " ", startingAt: 0))\(marker)  \(preset.description ?? "")")
+                print("BUILT-IN PRESETS")
+                for preset in grouped.builtIn {
+                    let marker = preset.name == active ? "*" : " "
+                    print("  \(preset.name.padding(toLength: 14, withPad: " ", startingAt: 0))\(marker)  \(preset.description ?? "")")
+                }
+
+                print("")
+                print("USER-DEFINED PRESETS (in \(config.path.path))")
+                for preset in grouped.user {
+                    let marker = preset.name == active ? "*" : " "
+                    print("  \(preset.name.padding(toLength: 14, withPad: " ", startingAt: 0))\(marker)  \(preset.description ?? "Custom preset")")
+                }
+
+                print("")
+                print("  * = active default")
             }
-
-            print("")
-            print("USER-DEFINED PRESETS (in \(config.path.path))")
-            for preset in grouped.user {
-                print("  \(preset.name.padding(toLength: 14, withPad: " ", startingAt: 0))   \(preset.description ?? "Custom preset")")
-            }
-
-            print("")
-            print("  * = active default")
         }
     }
 
@@ -42,14 +45,16 @@ struct PresetsCommand: ParsableCommand {
         @Argument var name: String
 
         mutating func run() throws {
-            let config = try loadConfig(self.config)
-            let preset = try PresetResolver().resolvePreset(named: name, config: config)
+            try runWithAppErrorHandling {
+                let config = try loadConfig(self.config)
+                let preset = try PresetResolver().resolvePreset(named: name, config: config)
 
-            print("--- SYSTEM PROMPT ---")
-            print(preset.systemPrompt ?? "")
-            print("")
-            print("--- USER PROMPT ---")
-            print(preset.userPrompt ?? "")
+                print("--- SYSTEM PROMPT ---")
+                print(preset.systemPrompt ?? "")
+                print("")
+                print("--- USER PROMPT ---")
+                print(preset.userPrompt ?? "")
+            }
         }
     }
 
@@ -58,10 +63,12 @@ struct PresetsCommand: ParsableCommand {
         var config: String?
 
         mutating func run() throws {
-            let config = try loadConfig(self.config)
-            let name = PresetResolver().activePresetName(cliPreset: nil, config: config)
-            let preset = try PresetResolver().resolvePreset(named: name, config: config)
-            print("\(name) (\(preset.source.rawValue))")
+            try runWithAppErrorHandling {
+                let config = try loadConfig(self.config)
+                let name = PresetResolver().activePresetName(cliPreset: nil, config: config)
+                let preset = try PresetResolver().resolvePreset(named: name, config: config)
+                print("\(name) (\(preset.source.rawValue))")
+            }
         }
     }
 
@@ -70,5 +77,19 @@ struct PresetsCommand: ParsableCommand {
 private func loadConfig(_ path: String?) throws -> ResolvedConfig {
     let resolvedPath = resolveConfigPath(path)
     let table = try ConfigStore().load(path: resolvedPath)
-    return ConfigResolver().resolve(path: resolvedPath, table: table)
+    let resolved = ConfigResolver().resolve(path: resolvedPath, table: table)
+    let terminal = TerminalIO(quiet: false, verbose: false)
+    for warning in ConfigResolver().namedProviderCollisionWarnings(resolved) {
+        terminal.warn(warning.replacingOccurrences(of: "Warning: ", with: ""))
+    }
+    return resolved
+}
+
+private func runWithAppErrorHandling(_ body: () throws -> Void) throws {
+    do {
+        try body()
+    } catch let appError as AppError {
+        TerminalIO(quiet: false, verbose: false).error(appError.message)
+        throw ExitCode(appError.exitCode.rawValue)
+    }
 }
