@@ -16,42 +16,40 @@ struct HTTPResponse {
 }
 
 struct HTTPClient: Sendable {
+    typealias Sender = @Sendable (URLRequest) async throws -> (Data, URLResponse)
+    typealias Sleeper = @Sendable (Double) async throws -> Void
+    private let sender: Sender
+    private let sleeper: Sleeper
+
+    init(
+        sender: @escaping Sender = { request in
+            try await URLSession.shared.data(for: request)
+        },
+        sleeper: @escaping Sleeper = { seconds in
+            try await Task.sleep(for: .seconds(seconds))
+        }
+    ) {
+        self.sender = sender
+        self.sleeper = sleeper
+    }
+
     func send(_ request: HTTPRequest) async throws -> HTTPResponse {
         let maxAttempts = max(1, request.network.retries + 1)
-        var lastError: ProviderError?
-
         for attempt in 1...maxAttempts {
-            do {
-                return try await singleAttempt(request)
-            } catch let providerError as ProviderError {
-                lastError = providerError
-
-                if attempt == maxAttempts || !shouldRetry(error: providerError) {
-                    throw providerError
-                }
-
+            let response = try await singleAttempt(request)
+            if attempt < maxAttempts && shouldRetry(statusCode: response.statusCode) {
                 let delaySeconds = retryDelay(
                     attempt: attempt,
                     baseDelaySeconds: request.network.retryBaseDelaySeconds,
-                    headers: (providerError.statusCode != nil ? headers(from: providerError) : nil)
+                    headers: response.headers
                 )
-                try await Task.sleep(for: .seconds(delaySeconds))
-            } catch {
-                let transport = ProviderError.transport(error.localizedDescription)
-                lastError = transport
-                if attempt == maxAttempts {
-                    throw transport
-                }
-                let delaySeconds = retryDelay(
-                    attempt: attempt,
-                    baseDelaySeconds: request.network.retryBaseDelaySeconds,
-                    headers: nil
-                )
-                try await Task.sleep(for: .seconds(delaySeconds))
+                try await sleeper(delaySeconds)
+                continue
             }
+            return response
         }
 
-        throw lastError ?? .transport("Unknown HTTP error")
+        throw ProviderError.transport("Unknown HTTP error.")
     }
 
     private func singleAttempt(_ request: HTTPRequest) async throws -> HTTPResponse {
@@ -64,7 +62,7 @@ struct HTTPClient: Sendable {
         }
 
         do {
-            let (data, response) = try await URLSession.shared.data(for: urlRequest)
+            let (data, response) = try await sender(urlRequest)
             guard let httpResponse = response as? HTTPURLResponse else {
                 throw ProviderError.invalidResponse("Invalid HTTP response.")
             }
@@ -82,22 +80,13 @@ struct HTTPClient: Sendable {
         }
     }
 
-    private func shouldRetry(error: ProviderError) -> Bool {
-        switch error {
-        case .timeout:
-            return true
-        case .transport:
-            return true
-        case .http(let statusCode, _, _):
-            return [429, 500, 502, 503, 504].contains(statusCode)
-        default:
-            return false
-        }
+    private func shouldRetry(statusCode: Int) -> Bool {
+        [429, 500, 502, 503, 504].contains(statusCode)
     }
 
     private func retryDelay(attempt: Int, baseDelaySeconds: Int, headers: [String: String]?) -> Double {
         if let headers,
-           let retryAfterHeader = headers.first(where: { $0.key.lowercased() == "retry-after" })?.value,
+           let retryAfterHeader = headerValue("retry-after", in: headers),
            let retryAfter = parseRetryAfter(retryAfterHeader)
         {
             return retryAfter
@@ -125,6 +114,10 @@ struct HTTPClient: Sendable {
         return nil
     }
 
+    private func headerValue(_ name: String, in headers: [String: String]) -> String? {
+        headers.first(where: { $0.key.caseInsensitiveCompare(name) == .orderedSame })?.value
+    }
+
     private func normalizeHeaders(_ rawHeaders: [AnyHashable: Any]) -> [String: String] {
         var headers: [String: String] = [:]
         for (rawKey, rawValue) in rawHeaders {
@@ -133,14 +126,5 @@ struct HTTPClient: Sendable {
             headers[key] = value
         }
         return headers
-    }
-
-    private func headers(from error: ProviderError) -> [String: String] {
-        switch error {
-        case .http(_, let headers, _):
-            return headers
-        default:
-            return [:]
-        }
     }
 }

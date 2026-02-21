@@ -153,18 +153,29 @@ struct ProviderFactory {
             )
 
         case .appleIntelligence:
+            if modelOverride != nil {
+                throw AppError.invalidArguments("--model is not applicable for apple-intelligence. This provider uses the system model.")
+            }
+            if explicitProvider && baseURLOverride != nil {
+                throw AppError.invalidArguments("--base-url cannot be used with --provider apple-intelligence. It is only valid for openai-compatible providers.")
+            }
             if apiKeyOverride != nil {
                 throw AppError.invalidArguments("--api-key is not applicable for apple-intelligence.")
             }
+            try AppleIntelligenceProvider.validateAvailability()
             return ProviderSelection(name: id.rawValue, id: id, provider: AppleIntelligenceProvider(), model: nil, baseURL: nil, apiKey: nil, promptless: false, warnings: [])
 
         case .appleTranslate:
             if modelOverride != nil {
                 throw AppError.invalidArguments("--model is not applicable for apple-translate. This provider does not use a model.")
             }
+            if explicitProvider && baseURLOverride != nil {
+                throw AppError.invalidArguments("--base-url cannot be used with --provider apple-translate. It is only valid for openai-compatible providers.")
+            }
             if apiKeyOverride != nil {
                 throw AppError.invalidArguments("--api-key is not applicable for apple-translate.")
             }
+            try AppleTranslateProvider.validateAvailability()
             return ProviderSelection(name: id.rawValue, id: id, provider: AppleTranslateProvider(), model: nil, baseURL: nil, apiKey: nil, promptless: true, warnings: [])
 
         case .deepl:

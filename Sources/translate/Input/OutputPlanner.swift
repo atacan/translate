@@ -41,7 +41,7 @@ struct OutputPlanner {
             let anyGlob = cameFromGlob || files.contains(where: \.matchedByGlob)
 
             if request.outputPath != nil && (hasMultiple || anyGlob) {
-                throw AppError.invalidArguments("--output can only be used with a single input. Use --suffix for multiple files.")
+                throw AppError.invalidArguments("--output can only be used with a single input. Use --suffix to control output filenames for multiple files.")
             }
 
             if request.inPlace {

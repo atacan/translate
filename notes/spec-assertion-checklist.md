@@ -8,8 +8,14 @@
 - Custom prompt language-placeholder warning.
 - `--suffix` warning for single explicit file routed to stdout.
 - Dry-run output includes provider/model/source/target/system/user/input preview sections.
+- HTTP retry policy retries only `429, 500, 502, 503, 504`.
+- `Retry-After` header is respected with case-insensitive lookup.
+- Apple provider flag applicability checks:
+  - `apple-translate`: rejects `--model`, `--api-key`, and `--base-url`.
+  - `apple-intelligence`: rejects `--api-key` and `--model`.
+- `.xcstrings` translation path routes through `StringCatalogKit` workflow.
+- Catalog workflow maps `--jobs` to max concurrent catalog translation requests.
+- Catalog workflow preserves partial-failure behavior and file-level summaries.
 
 ## Known deferred/incomplete
-- Apple providers (`apple-intelligence`, `apple-translate`) implementation.
 - DeepL provider integration (deferred by milestone scope).
-- `.xcstrings` workflow integration with `StringCatalogKit`.

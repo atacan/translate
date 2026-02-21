@@ -91,7 +91,8 @@ Notes:
 
 - `--base-url` without `--provider` automatically uses `openai-compatible`.
 - `--provider openai` and `--base-url` cannot be used together.
-- `apple-translate`, `apple-intelligence`, and `deepl` are currently not implemented for live translation.
+- `apple-translate` and `apple-intelligence` are available on macOS 26+.
+- `deepl` remains deferred for this milestone.
 
 ## Input Modes
 

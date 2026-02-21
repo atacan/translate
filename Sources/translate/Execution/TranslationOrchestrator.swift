@@ -188,7 +188,10 @@ struct TranslationOrchestrator {
             }
 
         case .files(let files, _):
-            let inspections = files.map(FileInspector.inspect)
+            let catalogFiles = files.filter(isCatalogFile(_:))
+            let textFiles = files.filter { !isCatalogFile($0) }
+
+            let inspections = textFiles.map(FileInspector.inspect)
             for inspection in inspections where inspection.warning != nil {
                 terminal.warn(inspection.warning!)
             }
@@ -202,10 +205,8 @@ struct TranslationOrchestrator {
                 return nil
             }
 
-            if validInspections.isEmpty {
-                if !immediateErrors.isEmpty {
-                    throw AppError.runtime("One or more files failed.")
-                }
+            if validInspections.isEmpty && catalogFiles.isEmpty {
+                if !immediateErrors.isEmpty { throw AppError.runtime("One or more files failed.") }
                 throw AppError.runtime("Error: Input text is empty.")
             }
 
@@ -214,8 +215,8 @@ struct TranslationOrchestrator {
                 case .stdout:
                     return [:]
                 case .singleFile(let file):
-                    guard let only = validInspections.first else { return [:] }
-                    return [only.file: file]
+                    guard let only = files.first else { return [:] }
+                    return [only: file]
                 case .perFile(let targets, _):
                     return Dictionary(uniqueKeysWithValues: targets.map { ($0.source, $0.destination) })
                 }
@@ -227,36 +228,68 @@ struct TranslationOrchestrator {
             }
 
             if options.dryRun {
-                guard let first = validInspections.first, let text = first.content else {
-                    throw AppError.runtime("Error: Input text is empty.")
+                if let first = validInspections.first, let text = first.content {
+                    let format = FormatDetector.detect(formatHint: formatHint, inputFile: first.file.path)
+                    let renderedPrompts = promptRenderer.render(
+                        basePrompts,
+                        with: PromptRenderContext(
+                            text: text,
+                            from: from,
+                            to: to,
+                            context: options.context ?? "",
+                            filename: first.file.path.lastPathComponent,
+                            format: format
+                        )
+                    )
+                    terminal.writeStdout(
+                        DryRunPrinter.render(
+                            provider: providerSelection.name,
+                            model: providerSelection.model,
+                            from: from,
+                            to: to,
+                            prompts: renderedPrompts,
+                            inputText: text
+                        )
+                    )
+                    return
                 }
-                let format = FormatDetector.detect(formatHint: formatHint, inputFile: first.file.path)
-                let renderedPrompts = promptRenderer.render(
-                    basePrompts,
-                    with: PromptRenderContext(
-                        text: text,
-                        from: from,
-                        to: to,
-                        context: options.context ?? "",
-                        filename: first.file.path.lastPathComponent,
-                        format: format
+
+                if !catalogFiles.isEmpty {
+                    terminal.writeStdout(
+                        CatalogWorkflow().dryRunDescription(
+                            providerName: providerSelection.name,
+                            model: providerSelection.model,
+                            targetLanguage: to,
+                            jobs: jobs,
+                            files: catalogFiles
+                        )
                     )
-                )
-                terminal.writeStdout(
-                    DryRunPrinter.render(
-                        provider: providerSelection.name,
-                        model: providerSelection.model,
-                        from: from,
-                        to: to,
-                        prompts: renderedPrompts,
-                        inputText: text
-                    )
-                )
-                return
+                    return
+                }
+
+                throw AppError.runtime("Error: Input text is empty.")
             }
 
             let writer = OutputWriter(terminal: terminal, prompter: ConfirmationPrompter(terminal: terminal, assumeYes: assumeYes))
             var results = immediateErrors
+
+            if !catalogFiles.isEmpty {
+                let catalogWorkflow = CatalogWorkflow()
+                for file in catalogFiles {
+                    let result = await catalogWorkflow.translateCatalogFile(
+                        file: file,
+                        targetLanguage: to,
+                        provider: providerSelection.provider,
+                        jobs: jobs,
+                        outputMode: outputPlan.mode,
+                        destinationMap: destinationMap,
+                        writer: writer,
+                        terminal: terminal,
+                        network: config.network
+                    )
+                    results.append(result)
+                }
+            }
 
             if jobs > 1 && validInspections.count > 1 {
                 let concurrentResults = try await translateFilesConcurrently(
@@ -310,6 +343,10 @@ struct TranslationOrchestrator {
                 throw AppError.runtime("One or more files failed.")
             }
         }
+    }
+
+    private func isCatalogFile(_ file: ResolvedInputFile) -> Bool {
+        file.path.pathExtension.lowercased() == "xcstrings"
     }
 
     private func translateFile(

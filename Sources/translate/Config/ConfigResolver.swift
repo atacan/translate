@@ -11,10 +11,13 @@ struct ConfigResolver {
         let defaultsYes = bool(in: table, at: ["defaults", "yes"]) ?? BuiltInDefaults.yes
         let defaultsJobs = int(in: table, at: ["defaults", "jobs"]) ?? BuiltInDefaults.jobs
 
+        let timeoutSeconds = max(1, int(in: table, at: ["network", "timeout_seconds"]) ?? BuiltInNetwork.timeoutSeconds)
+        let retries = max(0, int(in: table, at: ["network", "retries"]) ?? BuiltInNetwork.retries)
+        let retryBaseDelaySeconds = max(1, int(in: table, at: ["network", "retry_base_delay_seconds"]) ?? BuiltInNetwork.retryBaseDelaySeconds)
         let network = NetworkRuntimeConfig(
-            timeoutSeconds: int(in: table, at: ["network", "timeout_seconds"]) ?? BuiltInNetwork.timeoutSeconds,
-            retries: int(in: table, at: ["network", "retries"]) ?? BuiltInNetwork.retries,
-            retryBaseDelaySeconds: int(in: table, at: ["network", "retry_base_delay_seconds"]) ?? BuiltInNetwork.retryBaseDelaySeconds
+            timeoutSeconds: timeoutSeconds,
+            retries: retries,
+            retryBaseDelaySeconds: retryBaseDelaySeconds
         )
 
         let providerEntries = parseProviderEntries(table: table)
