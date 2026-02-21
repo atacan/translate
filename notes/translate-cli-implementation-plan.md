@@ -193,6 +193,10 @@ Implement config reading/writing and full precedence, including env vars and API
   - typed structs for stable fields
   - `TOMLTable` traversal for dynamic/hyphenated keys like `providers.openai-compatible.<name>`
 - Implement `config get/set/unset` dot-notation on `TOMLTable`.
+- Parse and validate runtime network config from TOML:
+  - `network.timeout_seconds`
+  - `network.retries`
+  - `network.retry_base_delay_seconds`
 - Implement option precedence:
   - CLI > preset > defaults > built-in.
 - Implement API-key precedence:
@@ -214,11 +218,20 @@ enum ProvidersCodingKeys: String, CodingKey {
 }
 ```
 
+```swift
+struct NetworkRuntimeConfig {
+    let timeoutSeconds: Int
+    let retries: Int
+    let retryBaseDelaySeconds: Int
+}
+```
+
 **Validation/tests to run**
 - `swift test --filter ConfigTests`
 - Round-trip tests for config with named `openai-compatible` endpoints.
 - Permission test on newly created config file.
 - Tests asserting `config path` prints expanded absolute path.
+- Tests asserting `[network]` values are loaded and surfaced into resolved runtime settings.
 
 **Exit criteria**
 - Config/env precedence is deterministic and covered by tests.
@@ -352,6 +365,7 @@ Implement runtime orchestration: retries, timeout, streaming, sanitization, and 
 - Build orchestration for single/multi-file runs and summary reporting.
 - Implement retry policy in `HTTPClient` via `UsefulThings.withRetry` wrapper.
 - Unwrap `RetryError<ProviderError>` from `withRetry` and remap to `lastError` so spec error text and exit semantics are preserved.
+- Wire runtime retry/timeout directly from resolved network config (`timeout_seconds`, `retries`, `retry_base_delay_seconds`).
 - Respect `Retry-After` override using case-insensitive header lookup and both legal formats (`delta-seconds`, HTTP-date).
 - Respect context-window non-retry behavior.
 - Add stdout streaming with cumulative-snapshot delta handling.
@@ -388,12 +402,13 @@ if let retryAfter = header(named: "retry-after", in: response.headers) {
 
 ```swift
 let retryConfig = RetryConfiguration(
-    maxAttempts: retries + 1,       // spec retries=3 => 4 total attempts
-    initialDelay: .seconds(1),
+    maxAttempts: network.retries + 1,
+    initialDelay: .seconds(network.retryBaseDelaySeconds),
     maxDelay: .seconds(30),
     backoffMultiplier: 2.0,
     jitterFactor: 0.2
 )
+let perRequestTimeout = Duration.seconds(network.timeoutSeconds)
 ```
 
 **Validation/tests to run**
@@ -406,6 +421,7 @@ let retryConfig = RetryConfiguration(
 - Retry tests proving `Retry-After` overrides computed delay.
 - Retry tests proving `RetryError<ProviderError>` is remapped to `lastError`.
 - Timeout tests proving timeout is per request attempt, not whole sequence.
+- Tests proving config overrides for `[network]` are applied to retry/timeout behavior.
 
 **Exit criteria**
 - No duplicate streamed output; retry policy follows spec.
@@ -489,6 +505,9 @@ Add incremental spec assertion gate and release-readiness checks.
 - Add `SpecAssertionTests` mapped to each checklist entry.
 - Run behavior scenarios from spec Section 12.
 - Add full `--help` snapshot parity tests (root + `config` + `presets` help output).
+- Add explicit warning assertions for:
+  - `--jobs` used with inline text/stdin (`--jobs has no effect for non-file input`)
+  - `--suffix` used with single explicit file to stdout (`--suffix has no effect when outputting to stdout`)
 
 **Small Swift snippets**
 ```swift
@@ -542,7 +561,7 @@ Recommendation: emit usage when available; otherwise print `token usage: unavail
 DeepL remains out of this milestone by explicit scope decision. The integration point is preserved so later implementation is additive.
 
 - Plug point: `Sources/translate/Providers/DeepL/DeepLProvider.swift`, `ProviderFactory`.
-- Contract: implement `TranslationProvider.translate(_:) -> ProviderResult`.
+- Contract: implement `TranslationProvider.translate(_:) async throws(ProviderError) -> ProviderResult`.
 - Behavior requirements when enabled:
   - Prompt-less provider warnings (`--system-prompt`, `--user-prompt`, `--context`, `--format`, prompt portion of `--preset` ignored).
   - `--to` concrete resolution required.
