@@ -17,6 +17,15 @@ Use this skill to help end users run and configure the `translate` CLI.
 - Customize prompts with presets, inline templates, `@file` templates, and placeholders.
 - Explain output behavior (`stdout`, `--output`, `--in-place`, suffix naming), parallel jobs, dry-run, and validation errors.
 
+## Starter commands
+
+```bash
+translate --text --to fr "Hello world"
+translate --to de README.md
+translate --provider ollama --text --to en --dry-run "Merhaba dunya"
+translate config set defaults.provider anthropic
+```
+
 ## References
 
 - Quick examples: `references/quickstart.md`

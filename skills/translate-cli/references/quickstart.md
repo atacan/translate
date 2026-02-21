@@ -1,5 +1,23 @@
 # Quickstart
 
+## Provider credentials (if required)
+
+Set API keys before running network providers:
+
+```bash
+export OPENAI_API_KEY="your_openai_key"
+export ANTHROPIC_API_KEY="your_anthropic_key"
+export DEEPL_API_KEY="your_deepl_key"
+```
+
+Notes:
+
+- `openai` needs `OPENAI_API_KEY`
+- `anthropic` needs `ANTHROPIC_API_KEY`
+- `deepl` needs `DEEPL_API_KEY`
+- `ollama` usually does not need an API key
+- `apple-translate` and `apple-intelligence` do not use API keys
+
 ## Translate inline text
 
 ```bash
