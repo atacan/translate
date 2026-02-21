@@ -5,7 +5,7 @@ struct TranslateCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "translate",
         abstract: "Translate text and files with configurable providers and prompt presets.",
-        version: "0.1.0",
+        version: "0.1.1",
         subcommands: [TranslateRunCommand.self, ConfigCommand.self, PresetsCommand.self],
         defaultSubcommand: TranslateRunCommand.self,
         helpNames: []

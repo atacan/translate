@@ -106,3 +106,57 @@ translate config set defaults.provider anthropic
 translate config set defaults.to fr
 translate config set defaults.jobs 4
 ```
+
+## Provider quick setup
+
+### OpenAI
+
+```bash
+export OPENAI_API_KEY="your_openai_key"
+translate --provider openai --text --to fr "Hello world"
+```
+
+### Anthropic
+
+```bash
+export ANTHROPIC_API_KEY="your_anthropic_key"
+translate --provider anthropic --text --to fr "Hello world"
+```
+
+### Ollama
+
+```bash
+translate --provider ollama --model llama3.2 --text --to fr "Hello world"
+```
+
+### DeepL
+
+```bash
+export DEEPL_API_KEY="your_deepl_key"
+translate --provider deepl --text --to fr "Hello world"
+```
+
+### OpenAI-compatible (ad-hoc endpoint)
+
+```bash
+translate \
+  --provider openai-compatible \
+  --base-url http://localhost:1234/v1 \
+  --model llama3.1 \
+  --text --to fr "Hello world"
+```
+
+### OpenAI-compatible (named endpoint in config)
+
+```bash
+translate config set providers.openai-compatible.lmstudio.base_url http://localhost:1234/v1
+translate config set providers.openai-compatible.lmstudio.model llama3.1
+translate --provider lmstudio --text --to fr "Hello world"
+```
+
+### Apple providers (macOS 26+)
+
+```bash
+translate --provider apple-translate --text --to fr "Hello world"
+translate --provider apple-intelligence --text --to fr "Hello world"
+```
