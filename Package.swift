@@ -30,5 +30,9 @@ let package = Package(
                 .product(name: "UsefulThings", package: "UsefulThings"),
             ]
         ),
+        .testTarget(
+            name: "translateTests",
+            dependencies: ["translate"]
+        ),
     ]
 )
