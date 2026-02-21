@@ -1,5 +1,5 @@
 {
-  "originHash" : "6d2e71f815a3f69f40f0dba7ee985e5503d2b4ab8df849a7e6177a39ea020f2d",
+  "originHash" : "87dc3487fda847fdebedca29424056848dd6872163c4f6f23ff59594fcf474fc",
   "pins" : [
     {
       "identity" : "anylanguagemodel",
@@ -53,6 +53,15 @@
       "state" : {
         "revision" : "e4d389e6bcc6771bb988d1a8a17695d8bfa97172",
         "version" : "1.0.0"
+      }
+    },
+    {
+      "identity" : "stringcatalogkit",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/atacan/StringCatalogKit.git",
+      "state" : {
+        "branch" : "prepare-open-source",
+        "revision" : "7df70026971069a98f8a6282c0d2a6e84db0a695"
       }
     },
     {

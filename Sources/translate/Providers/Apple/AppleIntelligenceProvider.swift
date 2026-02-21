@@ -1,5 +1,7 @@
 import Foundation
+#if canImport(AnyLanguageModel)
 import AnyLanguageModel
+#endif
 
 struct AppleIntelligenceProvider: TranslationProvider {
     let id: ProviderID = .appleIntelligence

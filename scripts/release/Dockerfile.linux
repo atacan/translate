@@ -1,0 +1,51 @@
+# Build static Linux binaries for both amd64 and arm64.
+#
+# Usage:
+#   DOCKER_BUILDKIT=1 docker build --output type=local,dest=./output/binaries -f scripts/release/Dockerfile.linux .
+#
+# This produces two fully static, musl-based binaries:
+#   translate-linux-amd64
+#   translate-linux-arm64
+
+FROM swift:6.2.3 AS builder
+
+RUN swift sdk install \
+    https://download.swift.org/swift-6.2.3-release/static-sdk/swift-6.2.3-RELEASE/swift-6.2.3-RELEASE_static-linux-0.0.1.artifactbundle.tar.gz \
+    --checksum f30ec724d824ef43b5546e02ca06a8682dafab4b26a99fbb0e858c347e507a2c
+
+WORKDIR /build
+
+# Copy package manifest first for dependency caching.
+COPY Package.swift Package.resolved ./
+RUN swift package resolve
+
+# Copy source code.
+COPY Sources/ Sources/
+COPY Tests/ Tests/
+
+# TOMLKit currently hard-codes Glibc and errors on Musl; patch it for static musl builds.
+RUN find .build/checkouts/TOMLKit/Sources -type f -name '*.swift' \
+    -exec perl -i -pe 's/#elseif canImport\(Glibc\)/#elseif canImport(Glibc) || canImport(Musl)/g; s/^\s*import Glibc$/#if canImport(Musl)\n\timport Musl\n#else\n\timport Glibc\n#endif/' {} + \
+    && echo 'patched-tomlkit-musl-v3' >/dev/null
+
+# Build for x86_64.
+RUN swift build --disable-automatic-resolution -c release --swift-sdk x86_64-swift-linux-musl \
+    && mkdir -p /output \
+    && cp "$(swift build --disable-automatic-resolution -c release --swift-sdk x86_64-swift-linux-musl --show-bin-path)/translate" \
+       /output/translate-linux-amd64
+
+# Build for aarch64.
+RUN swift build --disable-automatic-resolution -c release --swift-sdk aarch64-swift-linux-musl \
+    && cp "$(swift build --disable-automatic-resolution -c release --swift-sdk aarch64-swift-linux-musl --show-bin-path)/translate" \
+       /output/translate-linux-arm64
+
+# Strip debug symbols for both binaries.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends binutils-x86-64-linux-gnu binutils-aarch64-linux-gnu \
+    && rm -rf /var/lib/apt/lists/* \
+    && x86_64-linux-gnu-strip /output/translate-linux-amd64 \
+    && aarch64-linux-gnu-strip /output/translate-linux-arm64
+
+# Export stage - only binaries.
+FROM scratch
+COPY --from=builder /output/ /

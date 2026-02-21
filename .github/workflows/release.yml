@@ -1,0 +1,106 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+env:
+  NAME: translate
+
+jobs:
+  build-macos:
+    runs-on: macos-14
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: swift-actions/setup-swift@v2
+        with:
+          swift-version: "6.2"
+
+      - name: Build macOS binaries
+        run: scripts/release/build-macos.sh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-binaries
+          path: output/binaries/translate-macos-*
+
+  build-linux:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Linux binaries
+        run: scripts/release/build-linux.sh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-binaries
+          path: output/binaries/translate-linux-*
+
+  release:
+    needs:
+      - build-macos
+      - build-linux
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: output/binaries
+          merge-multiple: true
+
+      - name: Check if release already exists
+        id: check_release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$GITHUB_REF_NAME" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Package archives
+        if: steps.check_release.outputs.exists == 'false'
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          scripts/release/package-archives.sh "$VERSION"
+
+      - name: Create GitHub Release
+        if: steps.check_release.outputs.exists == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" output/archives/*.tar.gz \
+            --repo "${{ github.repository }}" \
+            --title "$GITHUB_REF_NAME" \
+            --generate-notes
+
+      - name: Download existing release archives
+        if: steps.check_release.outputs.exists == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p output/archives
+          rm -f output/archives/*.tar.gz
+          gh release download "$GITHUB_REF_NAME" \
+            --repo "${{ github.repository }}" \
+            --dir output/archives \
+            --pattern '*.tar.gz'
+
+      - name: Update formula in homebrew tap
+        env:
+          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          TAG="$GITHUB_REF_NAME"
+          scripts/release/update-formula.sh "$VERSION" "$TAG"

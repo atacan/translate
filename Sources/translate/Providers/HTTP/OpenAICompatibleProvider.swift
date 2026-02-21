@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
 
 struct OpenAIStreamParser {
     static func payload(fromSSELine line: String) -> String? {
@@ -148,6 +151,7 @@ struct OpenAICompatibleProvider: TranslationProvider {
         }
 
         let headers = requestHeaders()
+        #if canImport(Darwin)
         return AsyncThrowingStream { continuation in
             Task {
                 do {
@@ -238,6 +242,19 @@ struct OpenAICompatibleProvider: TranslationProvider {
                 }
             }
         }
+        #else
+        return AsyncThrowingStream { continuation in
+            Task {
+                do {
+                    let response = try await translate(request)
+                    continuation.yield(response.text)
+                    continuation.finish()
+                } catch {
+                    continuation.finish(throwing: error)
+                }
+            }
+        }
+        #endif
     }
 
     private func chatCompletionsURL(from baseURL: String) -> URL? {

@@ -4,21 +4,28 @@
 
 ## Installation
 
-Homebrew support is planned. Once published, this section will include the exact install command.
+Install via Homebrew tap:
 
-In the meantime, if you build from source:
+```bash
+brew tap atacan/tap
+brew install atacan/tap/translate
+```
+
+Verify:
+
+```bash
+translate --version
+translate --help
+```
+
+Build from source (alternative):
 
 ```bash
 swift build -c release
 sudo install -m 755 "$(swift build -c release --show-bin-path)/translate" /usr/local/bin/translate
 ```
 
-After installation, verify:
-
-```bash
-translate --version
-translate --help
-```
+Release and Homebrew automation docs: `docs/release.md`
 
 ## Quick Start
 
