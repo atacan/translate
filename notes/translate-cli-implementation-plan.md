@@ -1,27 +1,36 @@
-# `translate` CLI Implementation Plan (No Full Implementation)
+# `translate` CLI Implementation Plan (Revision 2)
 
 Date: 2026-02-21  
-Scope: planning only, based on `/Users/atacan/Developer/Repositories/translate/translate-cli-spec.md` and current repo state.
+Scope: planning only, aligned to current repo and dependency APIs.
+
+## Scope/compatibility decisions to lock first
+
+1. DeepL is intentionally postponed by project decision.  
+Plan impact: treat DeepL as an explicit spec exception for this milestone; do not claim full Section 7 parity until DeepL phase is executed.
+
+2. Apple Intelligence baseline conflict (spec 15.1 vs current toolchain/dependency 26).  
+Plan impact: adopt repo/toolchain reality (`macOS 26`, `AnyLanguageModel.SystemLanguageModel @available(macOS 26.0)`) as implementation baseline for this codebase and document the spec deviation explicitly.
 
 ## 1) Proposed architecture (modules/types and responsibilities)
 
-| Module | Key Types (planned) | Responsibility | Package usage |
+| Module | Key types (planned) | Responsibility | Package usage |
 |---|---|---|---|
-| CLI Surface | `TranslateCommand`, `ConfigCommand`, `PresetsCommand`, `GlobalOptions` | Parse args/flags, wire subcommands, run top-level validation and dispatch | `ArgumentParser` |
-| Domain Models | `ProviderID`, `LanguageRef`, `FormatHint`, `InputMode`, `OutputPlan`, `ResolvedOptions`, `AppError` | Central strongly typed model layer for behavior from spec sections 2–15 | Foundation only |
-| Config & Presets | `AppConfig`, `DefaultsConfig`, `ProviderConfig`, `PresetConfig`, `ConfigStore`, `ConfigKeyPath` | Load/merge config TOML, write config updates, resolve presets and precedence | `TOMLKit` |
-| Input Discovery | `InputResolver`, `GlobExpander`, `FileInspector` | Resolve inline/file/stdin mode, expand globs cross-platform, binary/UTF-8/empty checks | `Glob`, Foundation |
-| Prompt Engine | `PromptTemplateResolver`, `PlaceholderContext`, `PromptFileLoader`, `PromptWarningEngine` | Resolve preset + custom prompt templates + placeholders + dry-run output | Foundation |
-| Provider Abstraction | `TranslationProvider` protocol, `ProviderFactory`, adapters (`OpenAIProvider`, `AnthropicProvider`, `OllamaProvider`, `OpenAICompatibleProvider`, `AppleIntelligenceProvider`, `AppleTranslateProvider`) | Provider-agnostic translation execution with capability metadata | `AnyLanguageModel` + Foundation + Apple frameworks |
-| Catalog Translation | `CatalogWorkflow`, `CatalogProviderBridge` | `.xcstrings` flow via existing engine and LLM bridge | `StringCatalog`, `CatalogTranslation`, `CatalogTranslationLLM` |
-| Execution Pipeline | `TranslationOrchestrator`, `RetryPolicy`, `ConfirmationPrompter`, `OutputWriter`, `RunSummary` | Streaming vs buffered behavior, retries/timeouts, confirmations, multi-file parallel execution, exit code mapping | Foundation concurrency |
-| Diagnostics | `Logger`, `VerboseReport`, `WarningSink` | stderr warnings/info, `--quiet`/`--verbose` behavior, failure summaries | Foundation only |
+| CLI Surface | `TranslateCommand`, `ConfigCommand`, `PresetsCommand`, `GlobalOptions` | Parse flags/subcommands and dispatch | `ArgumentParser` |
+| Domain | `ProviderID`, `LanguageRef`, `FormatHint`, `InputMode`, `OutputPlan`, `ResolvedOptions`, `AppError`, `ExitCodeMap` | Type-safe core model and error/exit semantics | Foundation |
+| Config | `ConfigLocator`, `ConfigStore`, `ConfigResolver`, `ConfigKeyPath` | Resolve config path (`--config` > `TRANSLATE_CONFIG` > default), load/save TOML, dot-key get/set/unset | `TOMLKit` |
+| Input/Output Planning | `InputResolver`, `GlobExpander`, `FileInspector`, `OutputPlanner` | Detect input mode, expand globs, validate files, compute output behavior | `Glob`, Foundation |
+| Prompting | `BuiltInPresetStore`, `PresetResolver`, `PromptRenderer`, `PromptFileValidator`, `DryRunPrinter` | Template resolution, placeholder substitution, startup prompt-file validation, exact dry-run rendering | Foundation |
+| Provider Core | `ProviderRequest`, `ProviderResult`, `TranslationProvider`, `ProviderFactory` | Provider-agnostic contract with language direction and metadata | Foundation |
+| Provider HTTP Transport | `HTTPClient`, `RetryPolicy`, `OpenAIClient`, `AnthropicClient`, `OllamaClient`, `OpenAICompatibleClient` | Direct HTTP for strict status/header-aware retry and timeout behavior | `URLSession` |
+| Apple Providers | `AppleIntelligenceProvider`, `AppleTranslateProvider` | macOS-only providers and OS gating | `AnyLanguageModel` (Apple Intelligence), Apple Translation framework |
+| Catalog Workflow | `CatalogWorkflow`, `CatalogBridge` | `.xcstrings` routing and translation using actual `StringCatalogKit` API | `StringCatalog`, `CatalogTranslation`, `CatalogTranslationLLM` |
+| Diagnostics/Parity | `WarningEmitter`, `VerboseEmitter`, `SpecAssertionMatrix` | Warning policy, verbose info policy, spec-parity checklist assertions | Foundation |
 
 ## 2) File/folder plan for `Sources/`
 
 ```text
 Sources/translate/
-  translate.swift                      # @main entry only
+  translate.swift
   CLI/
     TranslateCommand.swift
     GlobalOptions.swift
@@ -34,37 +43,43 @@ Sources/translate/
     ExitCodes.swift
     Constants.swift
   Config/
-    AppConfig.swift
+    ConfigLocator.swift
     ConfigStore.swift
-    ConfigMerge.swift
+    ConfigResolver.swift
     ConfigKeyPath.swift
   Input/
     InputResolver.swift
     GlobExpander.swift
     FileInspector.swift
+    OutputPlanner.swift
   Prompt/
-    PromptTemplates.swift
+    BuiltInPresetStore.swift
+    PresetResolver.swift
     PromptRenderer.swift
-    PromptFileLoader.swift
+    PromptFileValidator.swift
+    DryRunPrinter.swift
   Providers/
     TranslationProvider.swift
     ProviderFactory.swift
-    AnyLanguageModel/
-      OpenAIProvider.swift
-      AnthropicProvider.swift
-      OllamaProvider.swift
-      OpenAICompatibleProvider.swift
+    ProviderRequest.swift
+    ProviderResult.swift
+    HTTP/
+      HTTPClient.swift
+      RetryPolicy.swift
+      OpenAIClient.swift
+      AnthropicClient.swift
+      OllamaClient.swift
+      OpenAICompatibleClient.swift
+    Apple/
       AppleIntelligenceProvider.swift
-    AppleTranslate/
       AppleTranslateProvider.swift
     DeepL/
-      DeepLProvider.swift              # phase placeholder only initially
+      DeepLProvider.swift  # deferred milestone hook
   Catalog/
     CatalogWorkflow.swift
-    CatalogProviderBridge.swift
+    CatalogBridge.swift
   Execution/
     TranslationOrchestrator.swift
-    RetryPolicy.swift
     ConfirmationPrompter.swift
     OutputWriter.swift
     ResponseSanitizer.swift
@@ -76,37 +91,68 @@ Sources/translate/
 Tests/translateTests/
   CLITests.swift
   ConfigTests.swift
-  PromptTests.swift
   InputResolverTests.swift
-  OutputPlanTests.swift
-  ProviderResolutionTests.swift
-  ResponseSanitizerTests.swift
+  OutputPlannerTests.swift
+  PromptTests.swift
+  ProviderFactoryTests.swift
+  RetryPolicyTests.swift
+  StreamingTests.swift
   CatalogWorkflowTests.swift
+  SpecAssertionTests.swift
 ```
 
 ## 3) Ordered implementation phases
 
-1. Phase 1: CLI skeleton + core domain contracts  
-2. Phase 2: Config/preset data model + precedence resolver  
-3. Phase 3: Input mode detection + glob/file validation + output planning  
-4. Phase 4: Prompt templating + custom prompt file loading + dry-run  
-5. Phase 5: Provider factory + AnyLanguageModel-backed adapters + Apple gating  
-6. Phase 6: Execution orchestration (streaming/buffering, retries, sanitization, confirmations)  
-7. Phase 7: `config` and `presets` subcommands  
-8. Phase 8: `.xcstrings` workflow wiring through `StringCatalogKit`  
-9. Phase 9: Hardening pass (validation matrix, exit codes, integration tests, help text parity)
+1. Phase 0: scope and platform compatibility lock  
+2. Phase 1: CLI/domain skeleton  
+3. Phase 2: config system and precedence  
+4. Phase 3: input/output planning and file validation  
+5. Phase 4: prompt engine and dry-run parity  
+6. Phase 5: provider contract + transport layer + provider factory  
+7. Phase 6: runtime execution (streaming/retry/confirmations/sanitization)  
+8. Phase 7: `config` and `presets` subcommands  
+9. Phase 8: `.xcstrings` workflow integration  
+10. Phase 9: spec-assertion hardening and release gate  
+11. DeepL later: deferred follow-up milestone
 
 ## 4) Phase details
 
-### Phase 1
+### Phase 0
 **Objective**  
-Establish a compileable CLI shape and shared domain model boundaries before behavior implementation.
+Lock explicit scope exceptions and compatibility assumptions before coding.
 
 **Concrete tasks**
-- Replace hello-world entrypoint with `AsyncParsableCommand` root + subcommands.
-- Add typed enums for provider/format/language input forms.
-- Define shared error + exit code mapping contract.
-- Add initial test target scaffolding.
+- Record “DeepL deferred” as a tracked exception.
+- Record Apple Intelligence macOS 26 baseline decision.
+- Add a `spec_parity.md` tracker with section status: `done`, `deferred`, `exception`.
+
+**Small Swift snippets**
+```swift
+enum MilestoneScope {
+    static let deepLEnabled = false
+}
+```
+
+```swift
+enum PlatformBaseline {
+    static let minimumMacOSMajor = 26
+}
+```
+
+**Validation/tests to run**
+- Manual review: scope tracker approved.
+
+**Exit criteria**
+- No ambiguity remains on DeepL and Apple-version expectations.
+
+### Phase 1
+**Objective**  
+Create compileable command surface and shared core types.
+
+**Concrete tasks**
+- Replace hello-world with `AsyncParsableCommand` root.
+- Add typed options/enums and exit-code mapping.
+- Scaffold command routing and tests.
 
 **Small Swift snippets**
 ```swift
@@ -116,377 +162,365 @@ struct TranslateCommand: AsyncParsableCommand {
         commandName: "translate",
         subcommands: [ConfigCommand.self, PresetsCommand.self]
     )
-
-    @Argument var inputs: [String] = []
-    @Option(name: .shortAndLong) var to: String?
-
-    mutating func run() async throws {
-        // dispatch to orchestrator in later phases
-    }
 }
 ```
 
 ```swift
 enum ExitCodeMap: Int32 {
-    case success = 0
-    case runtimeError = 1
-    case invalidArguments = 2
-    case aborted = 3
+    case success = 0, runtimeError = 1, invalidArguments = 2, aborted = 3
 }
 ```
 
 **Validation/tests to run**
 - `swift build`
 - `swift run translate --help`
-- `swift test` (empty scaffolding should pass)
+- `swift test --filter CLITests`
 
 **Exit criteria**
-- CLI starts with expected command tree.
-- Build/test pipeline is green.
-- No business logic mixed into entrypoint.
+- CLI tree and basic parsing are stable.
 
 ### Phase 2
 **Objective**  
-Implement config load/write + effective option resolution: CLI > preset > config defaults > built-ins.
+Implement config reading/writing and full precedence, including env vars and API-key resolution.
 
 **Concrete tasks**
-- Create `AppConfig` Codable model aligned with Section 8 schema.
-- Implement `ConfigStore.load/save` using `TOMLDecoder`/`TOMLEncoder`.
-- Implement dot-path key resolver for `config get/set/unset`.
-- Add merge resolver producing `ResolvedOptions`.
+- Implement config path resolver: `--config` > `TRANSLATE_CONFIG` > default path.
+- Implement hybrid TOML strategy:
+  - typed structs for stable fields
+  - `TOMLTable` traversal for dynamic/hyphenated keys like `providers.openai-compatible.<name>`
+- Implement `config get/set/unset` dot-notation on `TOMLTable`.
+- Implement option precedence:
+  - CLI > preset > defaults > built-in.
+- Implement API-key precedence:
+  - CLI `--api-key` > config `api_key` > env var.
+- Ensure config file creation with `0600`.
 
 **Small Swift snippets**
 ```swift
-struct AppConfig: Codable {
-    var defaults: DefaultsConfig?
-    var network: NetworkConfig?
-    var providers: ProvidersConfig?
-    var presets: [String: PresetConfig]?
+func resolvedConfigPath(cli: String?, env: [String: String]) -> String {
+    if let cli { return cli }
+    if let fromEnv = env["TRANSLATE_CONFIG"], !fromEnv.isEmpty { return fromEnv }
+    return "~/.config/translate/config.toml"
 }
 ```
 
 ```swift
-struct ConfigStore {
-    func load(from path: URL) throws -> AppConfig {
-        let text = try String(contentsOf: path, encoding: .utf8)
-        return try TOMLDecoder().decode(AppConfig.self, from: text)
-    }
+enum ProvidersCodingKeys: String, CodingKey {
+    case openai, anthropic, ollama, deepl
+    case openAICompatible = "openai-compatible"
 }
 ```
 
 **Validation/tests to run**
 - `swift test --filter ConfigTests`
-- Round-trip test: decode -> encode -> decode for sample TOML.
-- File mode test for `0600` permission creation on macOS.
+- Round-trip tests for config with named `openai-compatible` endpoints.
+- Permission test on newly created config file.
 
 **Exit criteria**
-- Effective config resolution is deterministic and unit-tested.
-- Dot-path read/write/unset semantics are stable.
+- Config/env precedence is deterministic and covered by tests.
 
 ### Phase 3
 **Objective**  
-Implement robust input classification and output target planning before network/provider calls.
+Deliver spec-accurate input mode and output mode planning with correct exit-code classes.
 
 **Concrete tasks**
-- Build input mode classifier: inline text vs file(s) vs stdin.
-- Add wildcard detection and explicit glob expansion with `swift-glob`.
-- Add file checks: exists, binary, UTF-8, empty warning.
-- Build output plan (`stdout`, single `--output`, in-place, or generated multi-file names).
+- Implement inline/file/stdin detection and ambiguity resolution.
+- Implement cross-platform glob expansion with `swift-glob`.
+- Implement file checks: binary/invalid UTF-8/empty warnings.
+- Implement output plan including glob single-match file-output rule.
+- Map glob zero-match as runtime failure (exit code `1`) instead of argument conflict (`2`).
 
 **Small Swift snippets**
 ```swift
-func looksLikeGlob(_ value: String) -> Bool {
-    value.contains("*") || value.contains("?") || value.contains("[")
+func looksLikeGlob(_ s: String) -> Bool {
+    s.contains("*") || s.contains("?") || s.contains("[")
 }
 ```
 
 ```swift
 let pattern = try Pattern(rawPattern)
-for try await match in search(directory: cwdURL, include: [pattern]) {
-    resolvedFiles.append(match)
+for try await url in search(directory: cwd, include: [pattern]) {
+    files.append(url)
 }
 ```
 
 **Validation/tests to run**
 - `swift test --filter InputResolverTests`
-- `swift test --filter OutputPlanTests`
-- Manual checks:
+- `swift test --filter OutputPlannerTests`
+- Manual:
   - `swift run translate "*.md" --to fr --dry-run`
-  - `swift run translate --text document.md --to en --dry-run`
+  - `swift run translate missing*.md --to fr`
 
 **Exit criteria**
-- Spec-compliant input mode and output mode decisions are covered by tests.
-- Glob zero-match and conflict errors return exit code `2` with exact wording.
+- Input/output planning behavior and exit-code mapping match spec intent.
 
 ### Phase 4
 **Objective**  
-Implement presets + prompt templating engine and `--dry-run` output.
+Implement prompt templating system and strict dry-run format parity.
 
 **Concrete tasks**
-- Add built-in prompt table for `general/markdown/xcode-strings/legal/ui`.
-- Implement preset shadowing and resolution order.
-- Implement placeholders (`{from}`, `{to}`, `{text}`, `{context}`, `{context_block}`, `{filename}`, `{format}`).
-- Implement `@file` prompt loading and missing file error.
-- Implement custom-prompt language placeholder warning and `--no-lang` suppression.
+- Add built-in presets and shadowing rules.
+- Implement placeholders and `from=auto -> "the source language"`.
+- Validate `system_prompt_file` and `user_prompt_file` at startup.
+- Implement warning for custom prompt without `{from}`/`{to}`.
+- Implement warning for `--no-lang` when no custom prompt is active.
+- Implement `--base-url` auto-provider info message.
+- Implement exact dry-run sections and “first 500 chars” truncation.
 
 **Small Swift snippets**
 ```swift
-struct PlaceholderContext {
-    let fromDisplay: String
-    let toDisplay: String
-    let text: String
-    let context: String
-    let filename: String
-    let format: String
-}
+let preview = input.count > 500 ? String(input.prefix(500)) + "..." : input
 ```
 
 ```swift
-func render(_ template: String, with c: PlaceholderContext) -> String {
-    template
-        .replacingOccurrences(of: "{from}", with: c.fromDisplay)
-        .replacingOccurrences(of: "{to}", with: c.toDisplay)
-        .replacingOccurrences(of: "{text}", with: c.text)
+if options.noLang && !resolvedPrompt.isCustom {
+    warnings.warn("--no-lang has no effect when using default prompts.")
 }
 ```
 
 **Validation/tests to run**
 - `swift test --filter PromptTests`
-- Golden tests for dry-run output formatting.
-- Warning suppression tests with `--quiet` and `--no-lang`.
+- Golden snapshot tests for dry-run output and warnings.
 
 **Exit criteria**
-- Prompt resolution behavior matches Section 5 + Section 13.
-- Dry-run never touches provider code.
+- Prompt/warning/dry-run behaviors match Sections 5, 6, 11, 13.
 
 ### Phase 5
 **Objective**  
-Implement provider resolution/factory and LLM provider adapters (DeepL intentionally deferred).
+Implement provider abstraction and provider factory with metadata-aware contract.
 
 **Concrete tasks**
-- Define `TranslationProvider` protocol with capability flags (`supportsPrompts`, `supportsModel`, `supportsAPIKey`).
-- Implement adapters:
-  - OpenAI / Anthropic / Ollama / anonymous openai-compatible / named openai-compatible via `AnyLanguageModel`.
-  - Apple Intelligence via `SystemLanguageModel` (macOS 26 target compatible).
-  - Apple Translate adapter as prompt-less provider (native framework wrapper).
-- Implement provider-selection rules and unknown-provider handling.
-- Implement provider-flag compatibility warnings and errors from Section 11.
+- Define provider protocol with language direction and metadata output.
+- Implement HTTP provider clients (OpenAI, Anthropic, Ollama, openai-compatible) via direct `URLSession`.
+- Implement Apple Intelligence provider using `AnyLanguageModel.SystemLanguageModel`.
+- Implement Apple Translate provider as prompt-less path.
+- Implement provider selection and `--base-url` rules.
 
 **Small Swift snippets**
+```swift
+struct ProviderRequest: Sendable {
+    let from: LanguageRef
+    let to: LanguageRef
+    let systemPrompt: String?
+    let userPrompt: String?
+    let text: String
+}
+```
+
+```swift
+struct ProviderResult: Sendable {
+    let text: String
+    let usage: UsageInfo?
+    let statusCode: Int?
+    let headers: [String: String]
+}
+```
+
 ```swift
 protocol TranslationProvider: Sendable {
     var id: ProviderID { get }
-    var supportsPrompts: Bool { get }
-    func translate(systemPrompt: String?, userPrompt: String) async throws -> String
+    func translate(_ request: ProviderRequest) async throws -> ProviderResult
 }
 ```
 
-```swift
-let model = OpenAILanguageModel(
-    baseURL: baseURL,
-    apiKey: apiKey,
-    model: modelID
-)
-let session = LanguageModelSession(model: model, instructions: systemPrompt ?? "")
-let response = try await session.respond(to: userPrompt)
-```
-
 **Validation/tests to run**
-- `swift test --filter ProviderResolutionTests`
-- Manual smoke with `--dry-run` and mocked/no-network provider tests.
-- OS/provider gating tests for Apple-only providers.
+- `swift test --filter ProviderFactoryTests`
+- Contract tests for provider selection and incompatible flag errors.
 
 **Exit criteria**
-- Provider factory resolves all supported current providers correctly.
-- Prompt-less provider ignore warnings and required-flag checks are enforced.
+- Provider interface supports prompt-capable and prompt-less providers cleanly.
 
 ### Phase 6
 **Objective**  
-Build execution runtime: streaming rules, retry/timeout, response sanitization, confirmations, and multi-file summary behavior.
+Implement runtime orchestration: retries, timeout, streaming, sanitization, and confirmations.
 
 **Concrete tasks**
-- Add orchestration pipeline for single and multi-file runs.
-- Implement streaming only for stdout-compatible modes; buffer otherwise.
-- Implement retry policy (429/500/502/503/504), exponential backoff, jitter, retry-after.
-- Implement timeout handling and context-window error short-circuit (no retry).
-- Implement outer code-fence stripping logic.
-- Implement interactive confirmation + non-TTY abort behavior (exit code `3`).
+- Build orchestration for single/multi-file runs and summary reporting.
+- Implement retry policy using status/header data from HTTP transport.
+- Respect `Retry-After` header and context-window non-retry behavior.
+- Add stdout streaming with cumulative-snapshot delta handling.
+- Add buffered writes for file outputs.
+- Implement fence stripping and non-TTY confirmation abort semantics.
 
 **Small Swift snippets**
 ```swift
-func stripOuterFence(_ text: String) -> String {
-    // detect full-response fenced wrapper and strip only outermost fence
-    return text
+var emitted = 0
+for try await snap in stream {
+    let full = snap.content.description
+    let delta = String(full.dropFirst(emitted))
+    emitted = full.count
+    stdout.write(delta)
 }
 ```
 
 ```swift
-for try await snapshot in session.streamResponse(to: prompt) {
-    FileHandle.standardOutput.write(Data(snapshot.content.description.utf8))
+if let retryAfter = response.headers["Retry-After"] {
+    delay = parseRetryAfter(retryAfter)
 }
 ```
 
 **Validation/tests to run**
-- `swift test --filter ResponseSanitizerTests`
-- Integration tests with mocked HTTP provider for retry/timeout.
-- Manual non-TTY checks in CI-style shell for confirmation behavior.
+- `swift test --filter RetryPolicyTests`
+- `swift test --filter StreamingTests`
+- CI-style non-TTY integration tests for confirmation flow.
 
 **Exit criteria**
-- Multi-file partial failures continue and summarize correctly.
-- Exit code semantics (0/1/2/3) match spec matrix.
+- No duplicate streamed output; retry policy follows spec.
 
 ### Phase 7
 **Objective**  
-Implement `config` and `presets` subcommands end-to-end.
+Complete `config` and `presets` subcommands.
 
 **Concrete tasks**
-- `config show/path/get/set/unset/edit` behaviors.
-- `presets list/show/which` behaviors with built-in + user-defined sources.
-- Add `config edit` editor fallback logic (`$EDITOR` -> `vi`).
-- Ensure `presets show` prints raw templates (placeholders intact).
+- Implement `config show/path/get/set/unset/edit`.
+- Implement `presets list/show/which`.
+- Ensure `presets show` keeps placeholders intact.
+- Ensure named-endpoint collision warning is emitted at config load time.
 
 **Small Swift snippets**
 ```swift
-struct ConfigCommand: ParsableCommand {
-    static let configuration = CommandConfiguration(subcommands: [
-        ConfigShow.self, ConfigPath.self, ConfigSet.self, ConfigGet.self, ConfigUnset.self, ConfigEdit.self
-    ])
+struct PresetsShow: ParsableCommand {
+    @Argument var name: String
+    mutating func run() throws { /* print raw templates */ }
 }
 ```
 
 ```swift
-struct PresetsShow: ParsableCommand {
-    @Argument var name: String
-    mutating func run() throws {
-        // print raw system/user templates with placeholders unchanged
-    }
+if builtInProviderNames.contains(endpointName) {
+    warnings.warn("Named endpoint '\(endpointName)' ... will never be used.")
 }
 ```
 
 **Validation/tests to run**
 - `swift test --filter CLITests`
-- Snapshot tests for `presets list` output grouping/markers.
-- Manual `config set/get/unset` round-trip.
+- Snapshot tests for `presets list/show/which`.
 
 **Exit criteria**
-- Both subcommands are spec-complete and documented in help output.
+- Subcommands match spec behavior and output format.
 
 ### Phase 8
 **Objective**  
-Wire `.xcstrings` translation flow through `StringCatalogKit` and provider bridge.
+Integrate `.xcstrings` translation with correct `StringCatalogKit` APIs and `--jobs` mapping.
 
 **Concrete tasks**
-- Detect `.xcstrings` inputs and route to catalog workflow.
-- Build bridge from provider abstraction to `CatalogTranslationLLM.LLMTranslator`.
-- Ensure placeholder preservation behavior is tested for catalog strings.
-- Keep this path provider-agnostic for supported prompt-capable providers.
+- Route `.xcstrings` input into catalog workflow.
+- Bridge provider abstraction into `LLMTranslator`.
+- Construct `CatalogTranslationEngine(translator:options:)`.
+- Map CLI `--jobs` to `TranslationOptions(maxConcurrentRequests:)`.
 
 **Small Swift snippets**
 ```swift
-let llmBridge = LLMTranslator { request, systemPrompt, userPrompt in
-    try await provider.translate(systemPrompt: systemPrompt, userPrompt: userPrompt)
+let translator = LLMTranslator { request, systemPrompt, userPrompt in
+    let providerReq = ProviderRequest(
+        from: .languageCode(request.sourceLanguage.rawValue),
+        to: .languageCode(request.targetLanguage.rawValue),
+        systemPrompt: systemPrompt,
+        userPrompt: userPrompt,
+        text: request.text
+    )
+    return try await provider.translate(providerReq).text
 }
 ```
 
 ```swift
-let engine = CatalogTranslationEngine(textTranslator: llmBridge)
-let result = try await engine.translate(catalog, to: targetLanguageCode)
+let options = TranslationOptions(maxConcurrentRequests: resolved.jobs)
+let engine = CatalogTranslationEngine(translator: translator, options: options)
+let result = try await engine.translateCatalog(catalog, to: targetLanguage)
 ```
 
 **Validation/tests to run**
 - `swift test --filter CatalogWorkflowTests`
-- Fixture tests for `.xcstrings` read -> translate -> write cycle.
+- Fixture tests for `.xcstrings` translation and partial failures.
 
 **Exit criteria**
-- `.xcstrings` path is deterministic and does not regress normal file/text path.
+- `.xcstrings` flow compiles and behaves as planned using real package APIs.
 
 ### Phase 9
 **Objective**  
-Finalize spec parity and quality hardening before release.
+Add incremental spec assertion gate and release-readiness checks.
 
 **Concrete tasks**
-- Audit all Section 11 hard errors/warnings for exact message text.
-- Verify help output parity with Section 16.
-- Add end-to-end scenario tests from Section 12 table.
-- Ensure collision warning for named endpoint vs built-in provider emits at config load time.
+- Create `notes/spec-assertion-checklist.md` (error text, warning text, exit codes, dry-run layout).
+- Add `SpecAssertionTests` mapped to each checklist entry.
+- Run behavior scenarios from spec Section 12.
 
 **Small Swift snippets**
 ```swift
-if options.verbose && options.quiet {
-    throw CLIError.invalidArguments("--verbose and --quiet cannot be used together.")
-}
+XCTAssertEqual(run("translate --verbose --quiet").exitCode, 2)
+XCTAssertContains(run(...).stderr, "--verbose and --quiet cannot be used together.")
 ```
 
 ```swift
-let code: ExitCodeMap = failures.isEmpty ? .success : .runtimeError
-throw ExitCode(rawValue: code.rawValue)
+let checklistStatus = ["§11.1-verbose-quiet-conflict": "PASS"]
 ```
 
 **Validation/tests to run**
 - `swift test`
-- `swift run translate --help`
-- Scenario script covering representative commands in Section 12.
+- Manual smoke for help/version/subcommands.
 
 **Exit criteria**
-- Traceability matrix (spec -> code/tests) is complete.
-- No known gaps except explicitly postponed DeepL implementation.
+- Parity matrix is explicit and green for in-scope items.
 
 ## 5) Risk/ambiguity list from spec + recommended decisions
 
-1. Apple Intelligence version mismatch in ecosystem docs  
-Recommendation: treat project target (`macOS 26`) as source of truth for this repo; gate feature at compile/runtime accordingly.
+1. DeepL deferred vs spec support list  
+Recommendation: keep explicit exception entry and do not claim full provider parity in this milestone.
 
-2. `--to` requirement for prompt-less providers vs built-in default `to=en`  
-Recommendation: interpret as “must resolve to a concrete value after precedence resolution”; if resolved value exists, proceed without extra error.
+2. Apple Intelligence minimum version mismatch  
+Recommendation: document codebase baseline as macOS 26 and track as spec deviation.
 
-3. Token usage in `--verbose` for `AnyLanguageModel` adapters  
-Recommendation: include token counts only when accessible; otherwise print `token usage: unavailable` instead of fabricating data.
+3. Retry/timeout observability with AnyLanguageModel for HTTP providers  
+Recommendation: use direct HTTP clients for those providers; keep AnyLanguageModel for Apple Intelligence only.
 
-4. Glob single-match “always file output mode” vs shell pre-expansion  
-Recommendation: enforce this rule only when raw argument still contains wildcard characters; document shell-expanded edge case.
+4. Streaming snapshot semantics (cumulative content)  
+Recommendation: always emit delta from last character count when writing to stdout.
 
-5. `TOMLKit` rewrite behavior can reorder formatting/comments  
-Recommendation: accept normalized TOML output for v1; preserve correctness over formatting fidelity.
+5. Glob zero-match exit code classification  
+Recommendation: treat as runtime/input failure (`1`), not argument conflict (`2`).
 
-6. Apple Translate markdown preservation limitations  
-Recommendation: add explicit user-facing note in help/docs when `apple-translate` is selected.
+6. Dynamic TOML key structure (`openai-compatible` + named children)  
+Recommendation: hybrid typed model + `TOMLTable` traversal for dynamic branches.
 
-7. Config unset semantics with nested dot paths  
-Recommendation: implement explicit parent-table traversal + key removal; no-op with clear message when key absent.
+7. Language normalization coverage (name/ISO/BCP47)  
+Recommendation: implement dedicated normalizer using Foundation locale APIs plus a curated alias table; do not rely on `StringCatalogKit` language enum for CLI parsing.
 
-8. `--jobs` on single/inline/stdin modes  
-Recommendation: warn and ignore exactly as spec; keep default orchestration path single-threaded for non-file flows.
+8. Token usage in verbose output may be unavailable per provider  
+Recommendation: emit usage when available; otherwise print `token usage: unavailable`.
 
 ## 6) “DeepL later” placeholder plan (where it will plug in)
 
-- Keep `Providers/DeepL/DeepLProvider.swift` as a stub type conforming to `TranslationProvider`.
-- Register `.deepl` in `ProviderID` and `ProviderFactory` now, but return a clear “not implemented in this milestone” runtime error until enabled.
-- Reuse existing provider capability flow (prompt-less, requires `to`, ignores prompt flags with warnings).
-- Planned implementation when unblocked:
-  - HTTP client via `URLSession` in `DeepLProvider`.
-  - Config/env key resolution: CLI `--api-key` > config `[providers.deepl].api_key` > `DEEPL_API_KEY`.
-  - Retry/timeout uses shared `RetryPolicy`.
-  - Add contract tests with `URLProtocol` stubs.
+DeepL remains out of this milestone by explicit scope decision. The integration point is preserved so later implementation is additive.
+
+- Plug point: `Sources/translate/Providers/DeepL/DeepLProvider.swift`, `ProviderFactory`.
+- Contract: implement `TranslationProvider.translate(_:) -> ProviderResult`.
+- Behavior requirements when enabled:
+  - Prompt-less provider warnings (`--system-prompt`, `--user-prompt`, `--context`, `--format`, prompt portion of `--preset` ignored).
+  - `--to` concrete resolution required.
+  - API key precedence: CLI > config > `DEEPL_API_KEY`.
+  - Retry/timeout through shared `HTTPClient` + `RetryPolicy`.
+- Validation set for follow-up milestone:
+  - unit tests for request/response mapping,
+  - retry/status code behavior,
+  - CLI acceptance scenarios from Section 12.
 
 ## 7) Final checklist mapping spec sections -> planned components
 
-| Spec section | Planned component(s) |
-|---|---|
-| 1. Overview | `CLI/TranslateCommand.swift`, `Execution/TranslationOrchestrator.swift` |
-| 2. Input Modes | `Input/InputResolver.swift`, `Input/GlobExpander.swift`, `Input/FileInspector.swift` |
-| 3. Output Modes | `Execution/OutputWriter.swift`, `Domain/Models.swift` (`OutputPlan`) |
-| 4. Full Flag Reference | `CLI/GlobalOptions.swift`, `CLI/TranslateCommand.swift` |
-| 5. Prompt Templating | `Prompt/PromptRenderer.swift`, `Prompt/PromptFileLoader.swift` |
-| 6. Presets | `Config/ConfigMerge.swift`, `Prompt/PromptTemplates.swift` |
-| 7. Providers | `Providers/ProviderFactory.swift`, provider adapter files |
-| 8. Configuration File | `Config/AppConfig.swift`, `Config/ConfigStore.swift` |
-| 9. `config` subcommand | `CLI/Commands/ConfigCommand.swift`, `Config/ConfigKeyPath.swift` |
-| 10. `presets` subcommand | `CLI/Commands/PresetsCommand.swift` |
-| 11. Validation & errors | `Domain/Errors.swift`, `CLI/GlobalOptions.swift`, `Execution/TranslationOrchestrator.swift` |
-| 12. Scenario behavior | `Tests/translateTests/CLITests.swift` scenario suite |
-| 13. Default prompts | `Prompt/PromptTemplates.swift` |
-| 14. Environment vars | `Config/ConfigStore.swift`, provider adapters |
-| 15. Exit codes | `Domain/ExitCodes.swift`, command top-level error mapper |
-| 16. Help text | `CLI/TranslateCommand.swift` + option help text |
-| 17. Developer notes | `Execution/RetryPolicy.swift`, `Execution/ResponseSanitizer.swift`, `Input/GlobExpander.swift` |
-
+| Spec section | Planned component(s) | Status in this milestone |
+|---|---|---|
+| 1. Overview | `CLI/TranslateCommand.swift`, `Execution/TranslationOrchestrator.swift` | In scope |
+| 2. Input Modes | `Input/InputResolver.swift`, `Input/GlobExpander.swift`, `Input/FileInspector.swift` | In scope |
+| 3. Output Modes | `Input/OutputPlanner.swift`, `Execution/OutputWriter.swift` | In scope |
+| 4. Full Flag Reference | `CLI/GlobalOptions.swift` | In scope |
+| 5. Prompt Templating | `Prompt/PromptRenderer.swift`, `Prompt/DryRunPrinter.swift` | In scope |
+| 6. Presets | `Prompt/BuiltInPresetStore.swift`, `Prompt/PresetResolver.swift` | In scope |
+| 7. Providers | `Providers/*`, `Providers/HTTP/*`, `Providers/Apple/*` | DeepL deferred exception |
+| 8. Configuration File | `Config/ConfigStore.swift`, `Config/ConfigResolver.swift` | In scope |
+| 9. `config` subcommand | `CLI/Commands/ConfigCommand.swift` | In scope |
+| 10. `presets` subcommand | `CLI/Commands/PresetsCommand.swift` | In scope |
+| 11. Validation and errors | `Domain/Errors.swift`, `Execution/TranslationOrchestrator.swift`, `SpecAssertionTests.swift` | In scope |
+| 12. Scenario behavior | `Tests/translateTests/CLITests.swift` | In scope |
+| 13. Default prompts | `Prompt/BuiltInPresetStore.swift` | In scope |
+| 14. Environment variables | `Config/ConfigLocator.swift`, provider factories | In scope |
+| 15. Exit codes | `Domain/ExitCodes.swift` | In scope |
+| 16. Help text | `CLI/TranslateCommand.swift` help definitions | In scope |
+| 17. Developer notes | `Execution/RetryPolicy.swift`, `Execution/ResponseSanitizer.swift`, `Input/GlobExpander.swift` | In scope |
