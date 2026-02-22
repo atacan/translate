@@ -14,7 +14,7 @@ let package = Package(
         .package(url: "https://github.com/atacan/UsefulThings.git", branch: "main"),
         .package(url: "https://github.com/atacan/DeepLAPI.git", branch: "main"),
         .package(url: "https://github.com/swift-server/swift-openapi-async-http-client", from: "1.1.0"),
-        .package(url: "https://github.com/atacan/StringCatalogKit.git", branch: "prepare-open-source"),
+        .package(url: "https://github.com/atacan/StringCatalogKit.git", branch: "main"),
         .package(url: "https://github.com/LebJe/TOMLKit.git", from: "0.6.0"),
         .package(url: "https://github.com/davbeck/swift-glob.git", from: "1.0.0"),
     ],
