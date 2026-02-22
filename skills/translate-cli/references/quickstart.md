@@ -17,6 +17,7 @@ Notes:
 - `deepl` needs `DEEPL_API_KEY`
 - `ollama` usually does not need an API key
 - `apple-translate` and `apple-intelligence` do not use API keys
+- Put options before positional input(s) in examples and real commands (for example, `translate --to de README.md`).
 
 ## Translate inline text
 
@@ -45,19 +46,19 @@ translate --to de docs/input.md
 ## Translate one file to a destination file
 
 ```bash
-translate --to de docs/input.md --output docs/input.de.md
+translate --to de --output docs/input.de.md docs/input.md
 ```
 
 ## Overwrite a file in place
 
 ```bash
-translate --to de docs/input.md --in-place --yes
+translate --to de --in-place --yes docs/input.md
 ```
 
 ## Translate many files with per-file outputs
 
 ```bash
-translate --to fr docs/*.md --suffix _fr --jobs 4
+translate --to fr --suffix _fr --jobs 4 docs/*.md
 ```
 
 ## Force tool-side glob expansion

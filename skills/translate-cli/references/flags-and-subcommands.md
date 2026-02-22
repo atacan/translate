@@ -3,10 +3,12 @@
 ## Main command
 
 ```bash
-translate [TEXT] [OPTIONS]
-translate [FILE...] [OPTIONS]
+translate [OPTIONS] [TEXT]
+translate [OPTIONS] [FILE...]
 echo "text" | translate [OPTIONS]
 ```
+
+Note: with the current parser shape, place options before positional input(s) for reliable parsing.
 
 ## Input and output flags
 

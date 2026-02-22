@@ -12,6 +12,7 @@ Use this skill to help end users run and configure the `translate` CLI.
 ## Capabilities
 
 - Build correct `translate` commands for inline text, stdin, single-file, and multi-file workflows.
+- Keep options before positional input(s) when constructing commands (for example, `translate --to de README.md`).
 - Explain provider selection, credentials, model/base URL requirements, and provider-specific constraints.
 - Configure defaults, provider endpoints, network settings, and presets with `translate config` and `config.toml`.
 - Customize prompts with presets, inline templates, `@file` templates, and placeholders.
@@ -25,6 +26,8 @@ translate --to de README.md
 translate --provider ollama --text --to en --dry-run "Merhaba dunya"
 translate config set defaults.provider anthropic
 ```
+
+Note: prefer option-before-input ordering in all examples and generated commands.
 
 ## References
 

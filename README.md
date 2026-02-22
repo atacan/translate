@@ -31,6 +31,8 @@ Release and Homebrew automation docs: `docs/release.md`
 
 These examples assume you already configured a provider (see Provider Setup below).
 
+Important: put options before positional text/file arguments (for example, `translate --to de README.md`, not `translate README.md --to de`).
+
 Translate inline text:
 
 ```bash
@@ -136,13 +138,13 @@ translate --to de docs/input.md
 Single file to explicit output path:
 
 ```bash
-translate --to de docs/input.md --output docs/input.de.md
+translate --to de --output docs/input.de.md docs/input.md
 ```
 
 In-place overwrite:
 
 ```bash
-translate --to de docs/input.md --in-place
+translate --to de --in-place docs/input.md
 ```
 
 ### Multiple files and glob patterns
@@ -150,7 +152,7 @@ translate --to de docs/input.md --in-place
 Use shell-expanded file lists:
 
 ```bash
-translate --to fr docs/*.md --suffix _fr
+translate --to fr --suffix _fr docs/*.md
 ```
 
 Or quote patterns so `translate` expands the glob:

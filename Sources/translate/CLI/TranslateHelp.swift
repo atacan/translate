@@ -3,21 +3,21 @@ import Foundation
 enum TranslateHelp {
     static let root = """
 USAGE:
-  translate [TEXT] [OPTIONS]
-  translate [FILE...] [OPTIONS]
+  translate [OPTIONS] [TEXT]
+  translate [OPTIONS] [FILE...]
   echo "text" | translate [OPTIONS]
   translate <subcommand> [OPTIONS]
 
 EXAMPLES:
-  translate "Bonjour le monde" --to en
-  translate document.md --to fr
-  translate *.md --to ja
-  translate document.md --to de --context "Button label in settings"
-  translate document.md --provider apple-translate --to zh
-  translate document.md --provider lm-studio --to fr
+  translate --to en "Bonjour le monde"
+  translate --to fr document.md
+  translate --to ja *.md
+  translate --to de --context "Button label in settings" document.md
+  translate --provider apple-translate --to zh document.md
+  translate --provider lm-studio --to fr document.md
   cat notes.txt | translate --to de
-  translate document.md --to fr --dry-run
-  translate document.md --preset xcode-strings --to ja
+  translate --to fr --dry-run document.md
+  translate --preset xcode-strings --to ja document.md
 
 INPUT:
       --text                Force positional argument to be treated as literal text,
@@ -26,6 +26,7 @@ INPUT:
   FILE...                   One or more files to translate. Glob patterns (*.md) are
                             expanded by the tool on all platforms.
                             Note: globs always write output files, even if only one file matches.
+                            For reliable parsing, place options before TEXT/FILE arguments.
   stdin                     Piped input is read when no positional arg is given
 
 OUTPUT:
