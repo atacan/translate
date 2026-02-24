@@ -2,6 +2,8 @@
 
 `translate` is a command-line tool for translating text and files with configurable providers, prompt presets, and TOML-based configuration.
 
+LLM-backed providers (`openai`, `anthropic`, `ollama`, `openai-compatible`, and `apple-intelligence`) use [`AnyLanguageModel`](https://github.com/mattt/AnyLanguageModel) as the model/provider abstraction layer.
+
 ## Installation
 
 Install via Homebrew tap:
@@ -85,7 +87,7 @@ translate --provider ollama --model llama3.2 --text --to en "Merhaba dunya"
 Use ad-hoc flags:
 
 ```bash
-translate --base-url http://localhost:1234/v1 --model llama3.1 --text --to en "Merhaba dunya"
+translate --base-url http://localhost:1234/v1 --api-key dummy --model llama3.1 --text --to en "Merhaba dunya"
 ```
 
 Or configure named endpoints (recommended):
@@ -93,6 +95,7 @@ Or configure named endpoints (recommended):
 ```bash
 translate config set providers.openai-compatible.lmstudio.base_url http://localhost:1234/v1
 translate config set providers.openai-compatible.lmstudio.model llama3.1
+translate config set providers.openai-compatible.lmstudio.api_key dummy
 translate --provider lmstudio --text --to en "Merhaba dunya"
 ```
 
@@ -106,6 +109,7 @@ translate --provider deepl --text --to en "Merhaba dunya"
 Notes:
 
 - `--base-url` without `--provider` automatically uses `openai-compatible`.
+- `openai-compatible` now requires an API key (some local endpoints may accept any placeholder string).
 - `--provider openai` and `--base-url` cannot be used together.
 - `apple-translate` and `apple-intelligence` are available on macOS 26+.
 
@@ -294,6 +298,8 @@ api_key = ""
 [presets.markdown]
 user_prompt = "Translate this markdown from {from} to {to}: {text}"
 ```
+
+Network settings above apply to providers using the custom HTTP path (currently DeepL). `AnyLanguageModel`-backed LLM providers use the library's networking behavior.
 
 ## Flags Reference
 

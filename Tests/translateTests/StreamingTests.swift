@@ -2,40 +2,48 @@ import XCTest
 @testable import translate
 
 final class StreamingTests: XCTestCase {
-    func testOpenAIStreamParserExtractsPayloadFromSSEDataLines() {
-        XCTAssertEqual(OpenAIStreamParser.payload(fromSSELine: "data: {\"id\":\"x\"}"), "{\"id\":\"x\"}")
-        XCTAssertNil(OpenAIStreamParser.payload(fromSSELine: "data: [DONE]"))
-        XCTAssertNil(OpenAIStreamParser.payload(fromSSELine: "event: message"))
+    func testSnapshotDeltaChunkReturnsSuffixForCumulativeSnapshots() {
+        XCTAssertEqual(
+            AnyLanguageModelTextProvider.deltaChunk(previous: "Bon", current: "Bonjour"),
+            "jour"
+        )
     }
 
-    func testOpenAIStreamParserExtractsDeltaContent() {
-        let stringPayload: [String: Any] = [
-            "choices": [["delta": ["content": "Bon"]]],
-        ]
-        XCTAssertEqual(OpenAIStreamParser.deltaContent(from: stringPayload), "Bon")
-
-        let arrayPayload: [String: Any] = [
-            "choices": [[
-                "delta": [
-                    "content": [
-                        ["text": "jour"],
-                        ["text": "!"],
-                    ],
-                ],
-            ]],
-        ]
-        XCTAssertEqual(OpenAIStreamParser.deltaContent(from: arrayPayload), "jour!")
+    func testSnapshotDeltaChunkReturnsNilWhenUnchanged() {
+        XCTAssertNil(AnyLanguageModelTextProvider.deltaChunk(previous: "Bonjour", current: "Bonjour"))
     }
 
-    func testOpenAIStreamParserExtractsNonStreamingBodyContent() {
-        let body = """
-        {"choices":[{"message":{"content":"Bonjour"}}]}
-        """
-        XCTAssertEqual(OpenAIStreamParser.contentFromNonStreamingBody(body), "Bonjour")
+    func testSnapshotDeltaChunkReturnsWholeTextWhenStreamResets() {
+        XCTAssertEqual(
+            AnyLanguageModelTextProvider.deltaChunk(previous: "Bonjour", current: "Salut"),
+            "Salut"
+        )
     }
 
-    func testOpenAIStreamParserReturnsNilForInvalidOrEmptyNonStreamingBody() {
-        XCTAssertNil(OpenAIStreamParser.contentFromNonStreamingBody("{\"choices\":[]}"))
-        XCTAssertNil(OpenAIStreamParser.contentFromNonStreamingBody("not json"))
+    func testNormalizeOpenAIBaseURLAppendsV1() throws {
+        let url = try XCTUnwrap(
+            AnyLanguageModelTextProvider.normalizeBaseURL("http://localhost:1234", for: .openAICompatible)
+        )
+        XCTAssertEqual(url.absoluteString, "http://localhost:1234/v1/")
+    }
+
+    func testNormalizeAnthropicBaseURLStripsV1() throws {
+        let url = try XCTUnwrap(
+            AnyLanguageModelTextProvider.normalizeBaseURL("https://api.anthropic.com/v1", for: .anthropic)
+        )
+        XCTAssertEqual(url.absoluteString, "https://api.anthropic.com/")
+    }
+
+    func testMapErrorMapsTimeout() {
+        let mapped = AnyLanguageModelTextProvider.mapError(
+            URLError(.timedOut),
+            providerName: "openai",
+            timeoutSeconds: 12
+        )
+
+        guard case .timeout(let seconds) = mapped else {
+            return XCTFail("Expected timeout mapping.")
+        }
+        XCTAssertEqual(seconds, 12)
     }
 }

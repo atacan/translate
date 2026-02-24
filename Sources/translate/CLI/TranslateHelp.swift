@@ -49,7 +49,7 @@ PROVIDER:
                             <named-endpoint-from-config>
                             [default: openai, or value from config]
   -m, --model <ID>          Model ID [default: depends on provider]
-      --base-url <URL>      API base URL [required for anonymous openai-compatible]
+      --base-url <URL>      API base URL [required for openai-compatible]
       --api-key <KEY>       API key [overrides env var; prefer env vars for security]
 
 PROMPTS:

@@ -3,6 +3,93 @@ import TOMLKit
 @testable import translate
 
 final class ProviderFactoryTests: XCTestCase {
+    func testOpenAIResolvesWithAPIKey() throws {
+        let factory = ProviderFactory(config: makeConfig(), env: ["OPENAI_API_KEY": "key"])
+        let selection = try factory.make(
+            providerName: ProviderID.openai.rawValue,
+            modelOverride: nil,
+            baseURLOverride: nil,
+            apiKeyOverride: nil,
+            explicitProvider: true
+        )
+
+        XCTAssertEqual(selection.provider.id, .openai)
+        XCTAssertEqual(selection.name, ProviderID.openai.rawValue)
+        XCTAssertFalse(selection.promptless)
+        XCTAssertEqual(selection.apiKey, "key")
+    }
+
+    func testAnthropicResolvesWithAPIKey() throws {
+        let factory = ProviderFactory(config: makeConfig(), env: ["ANTHROPIC_API_KEY": "key"])
+        let selection = try factory.make(
+            providerName: ProviderID.anthropic.rawValue,
+            modelOverride: nil,
+            baseURLOverride: nil,
+            apiKeyOverride: nil,
+            explicitProvider: true
+        )
+
+        XCTAssertEqual(selection.provider.id, .anthropic)
+        XCTAssertEqual(selection.name, ProviderID.anthropic.rawValue)
+    }
+
+    func testOllamaResolvesWithoutAPIKey() throws {
+        let factory = ProviderFactory(config: makeConfig(), env: [:])
+        let selection = try factory.make(
+            providerName: ProviderID.ollama.rawValue,
+            modelOverride: nil,
+            baseURLOverride: nil,
+            apiKeyOverride: nil,
+            explicitProvider: true
+        )
+
+        XCTAssertEqual(selection.provider.id, .ollama)
+        XCTAssertNil(selection.apiKey)
+    }
+
+    func testOpenAICompatibleRequiresAPIKey() {
+        let factory = ProviderFactory(config: makeConfig(), env: [:])
+        XCTAssertThrowsError(
+            try factory.make(
+                providerName: ProviderID.openAICompatible.rawValue,
+                modelOverride: "model-x",
+                baseURLOverride: "http://localhost:1234/v1",
+                apiKeyOverride: nil,
+                explicitProvider: true
+            )
+        ) { error in
+            guard let appError = error as? AppError else {
+                return XCTFail("Expected AppError.")
+            }
+            XCTAssertEqual(appError.message, "Error: API key is required for provider 'openai-compatible'.")
+            XCTAssertEqual(appError.exitCode, .runtimeError)
+        }
+    }
+
+    func testNamedOpenAICompatibleRequiresAPIKey() {
+        let config = makeConfig(
+            namedOpenAICompatible: [
+                "lmstudio": ProviderConfigEntry(baseURL: "http://localhost:1234/v1", model: "llama3", apiKey: nil),
+            ]
+        )
+        let factory = ProviderFactory(config: config, env: [:])
+
+        XCTAssertThrowsError(
+            try factory.make(
+                providerName: "lmstudio",
+                modelOverride: nil,
+                baseURLOverride: nil,
+                apiKeyOverride: nil,
+                explicitProvider: true
+            )
+        ) { error in
+            guard let appError = error as? AppError else {
+                return XCTFail("Expected AppError.")
+            }
+            XCTAssertEqual(appError.message, "Error: API key is required for provider 'openai-compatible'.")
+        }
+    }
+
     func testAppleTranslateRejectsModelOverride() {
         let factory = ProviderFactory(config: makeConfig(), env: [:])
         XCTAssertThrowsError(
@@ -149,7 +236,10 @@ final class ProviderFactoryTests: XCTestCase {
         }
     }
 
-    private func makeConfig(providers: [String: ProviderConfigEntry] = [:]) -> ResolvedConfig {
+    private func makeConfig(
+        providers: [String: ProviderConfigEntry] = [:],
+        namedOpenAICompatible: [String: ProviderConfigEntry] = [:]
+    ) -> ResolvedConfig {
         ResolvedConfig(
             path: URL(fileURLWithPath: "/tmp/config.toml"),
             table: TOMLTable(),
@@ -162,7 +252,7 @@ final class ProviderFactoryTests: XCTestCase {
             defaultsJobs: 1,
             network: NetworkRuntimeConfig(timeoutSeconds: 120, retries: 3, retryBaseDelaySeconds: 1),
             providers: providers,
-            namedOpenAICompatible: [:],
+            namedOpenAICompatible: namedOpenAICompatible,
             presets: [:]
         )
     }

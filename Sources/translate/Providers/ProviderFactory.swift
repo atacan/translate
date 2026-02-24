@@ -50,13 +50,16 @@ struct ProviderFactory {
             guard let model, !model.isEmpty else {
                 throw AppError.invalidArguments("--model is required when using openai-compatible.")
             }
+            guard !requireCredentials || (apiKey?.isEmpty == false) else {
+                throw AppError.runtime("Error: API key is required for provider 'openai-compatible'.")
+            }
 
-            let provider = OpenAICompatibleProvider(
+            let provider = AnyLanguageModelTextProvider(
                 id: .openAICompatible,
+                backend: .openAICompatible,
                 baseURL: baseURL,
                 model: model,
-                apiKey: apiKey,
-                httpClient: HTTPClient()
+                apiKey: apiKey
             )
             return ProviderSelection(name: providerName, id: nil, provider: provider, model: model, baseURL: baseURL, apiKey: apiKey, promptless: false, warnings: [])
         }
@@ -88,7 +91,13 @@ struct ProviderFactory {
             return ProviderSelection(
                 name: id.rawValue,
                 id: id,
-                provider: OpenAICompatibleProvider(id: id, baseURL: baseURL, model: model, apiKey: apiKey, httpClient: HTTPClient()),
+                provider: AnyLanguageModelTextProvider(
+                    id: id,
+                    backend: .openai,
+                    baseURL: baseURL,
+                    model: model,
+                    apiKey: apiKey
+                ),
                 model: model,
                 baseURL: baseURL,
                 apiKey: apiKey,
@@ -111,7 +120,13 @@ struct ProviderFactory {
             return ProviderSelection(
                 name: id.rawValue,
                 id: id,
-                provider: AnthropicProvider(baseURL: baseURL, model: model, apiKey: apiKey ?? "", httpClient: HTTPClient()),
+                provider: AnyLanguageModelTextProvider(
+                    id: id,
+                    backend: .anthropic,
+                    baseURL: baseURL,
+                    model: model,
+                    apiKey: apiKey
+                ),
                 model: model,
                 baseURL: baseURL,
                 apiKey: apiKey,
@@ -129,7 +144,13 @@ struct ProviderFactory {
             return ProviderSelection(
                 name: id.rawValue,
                 id: id,
-                provider: OpenAICompatibleProvider(id: id, baseURL: baseURL, model: model, apiKey: nil, httpClient: HTTPClient()),
+                provider: AnyLanguageModelTextProvider(
+                    id: id,
+                    backend: .ollama,
+                    baseURL: baseURL,
+                    model: model,
+                    apiKey: nil
+                ),
                 model: model,
                 baseURL: baseURL,
                 apiKey: nil,
@@ -149,11 +170,20 @@ struct ProviderFactory {
             guard let model, !model.isEmpty else {
                 throw AppError.invalidArguments("--model is required when using openai-compatible.")
             }
+            guard !requireCredentials || (apiKey?.isEmpty == false) else {
+                throw AppError.runtime("Error: API key is required for provider 'openai-compatible'.")
+            }
 
             return ProviderSelection(
                 name: id.rawValue,
                 id: id,
-                provider: OpenAICompatibleProvider(id: id, baseURL: baseURL, model: model, apiKey: apiKey, httpClient: HTTPClient()),
+                provider: AnyLanguageModelTextProvider(
+                    id: id,
+                    backend: .openAICompatible,
+                    baseURL: baseURL,
+                    model: model,
+                    apiKey: apiKey
+                ),
                 model: model,
                 baseURL: baseURL,
                 apiKey: apiKey,
