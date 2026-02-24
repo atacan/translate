@@ -952,7 +952,8 @@ LANGUAGES:
                             Note: "auto" is not valid for --to
 
 PROVIDER:
-  -p, --provider <name>     openai | anthropic | ollama | openai-compatible |
+  -p, --provider <name>     openai | anthropic | gemini | open-responses |
+                            ollama | openai-compatible | coreml | mlx | llama |
                             apple-intelligence | apple-translate | deepl |
                             <named-endpoint-from-config>
                             [default: openai, or value from config]
@@ -998,6 +999,8 @@ SUBCOMMANDS:
 ENVIRONMENT VARIABLES:
   OPENAI_API_KEY            API key for OpenAI
   ANTHROPIC_API_KEY         API key for Anthropic
+  GEMINI_API_KEY            API key for Gemini
+  OPEN_RESPONSES_API_KEY    API key for Open Responses
   DEEPL_API_KEY             API key for DeepL
   TRANSLATE_CONFIG          Path to config file
   EDITOR                    Editor for `translate config edit`

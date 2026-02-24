@@ -83,7 +83,7 @@ struct ConfigResolver {
     private func parseProviderEntries(table: TOMLTable) -> [String: ProviderConfigEntry] {
         var output: [String: ProviderConfigEntry] = [:]
 
-        let providers: [ProviderID] = [.openai, .anthropic, .ollama, .deepl]
+        let providers: [ProviderID] = [.openai, .anthropic, .gemini, .openResponses, .ollama, .coreml, .mlx, .llama, .deepl]
         for provider in providers {
             let path = ["providers", provider.rawValue]
             output[provider.rawValue] = ProviderConfigEntry(

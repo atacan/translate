@@ -33,6 +33,36 @@ final class ProviderFactoryTests: XCTestCase {
         XCTAssertEqual(selection.name, ProviderID.anthropic.rawValue)
     }
 
+    func testGeminiResolvesWithAPIKey() throws {
+        let factory = ProviderFactory(config: makeConfig(), env: ["GEMINI_API_KEY": "key"])
+        let selection = try factory.make(
+            providerName: ProviderID.gemini.rawValue,
+            modelOverride: nil,
+            baseURLOverride: nil,
+            apiKeyOverride: nil,
+            explicitProvider: true
+        )
+
+        XCTAssertEqual(selection.provider.id, .gemini)
+        XCTAssertEqual(selection.name, ProviderID.gemini.rawValue)
+        XCTAssertEqual(selection.apiKey, "key")
+    }
+
+    func testOpenResponsesResolvesWithAPIKey() throws {
+        let factory = ProviderFactory(config: makeConfig(), env: ["OPEN_RESPONSES_API_KEY": "key"])
+        let selection = try factory.make(
+            providerName: ProviderID.openResponses.rawValue,
+            modelOverride: nil,
+            baseURLOverride: "https://openrouter.ai/api/v1",
+            apiKeyOverride: nil,
+            explicitProvider: true
+        )
+
+        XCTAssertEqual(selection.provider.id, .openResponses)
+        XCTAssertEqual(selection.name, ProviderID.openResponses.rawValue)
+        XCTAssertEqual(selection.baseURL, "https://openrouter.ai/api/v1")
+    }
+
     func testOllamaResolvesWithoutAPIKey() throws {
         let factory = ProviderFactory(config: makeConfig(), env: [:])
         let selection = try factory.make(
@@ -45,6 +75,56 @@ final class ProviderFactoryTests: XCTestCase {
 
         XCTAssertEqual(selection.provider.id, .ollama)
         XCTAssertNil(selection.apiKey)
+    }
+
+    func testMLXResolvesWithoutAPIKey() throws {
+        let factory = ProviderFactory(config: makeConfig(), env: [:])
+        let selection = try factory.make(
+            providerName: ProviderID.mlx.rawValue,
+            modelOverride: nil,
+            baseURLOverride: nil,
+            apiKeyOverride: nil,
+            explicitProvider: true
+        )
+
+        XCTAssertEqual(selection.provider.id, .mlx)
+        XCTAssertNotNil(selection.model)
+    }
+
+    func testCoreMLRequiresModelPath() {
+        let factory = ProviderFactory(config: makeConfig(), env: [:])
+        XCTAssertThrowsError(
+            try factory.make(
+                providerName: ProviderID.coreml.rawValue,
+                modelOverride: nil,
+                baseURLOverride: nil,
+                apiKeyOverride: nil,
+                explicitProvider: true
+            )
+        ) { error in
+            guard let appError = error as? AppError else {
+                return XCTFail("Expected AppError.")
+            }
+            XCTAssertEqual(appError.message, "--model is required when using coreml (path to .mlmodelc).")
+        }
+    }
+
+    func testLlamaRequiresModelPath() {
+        let factory = ProviderFactory(config: makeConfig(), env: [:])
+        XCTAssertThrowsError(
+            try factory.make(
+                providerName: ProviderID.llama.rawValue,
+                modelOverride: nil,
+                baseURLOverride: nil,
+                apiKeyOverride: nil,
+                explicitProvider: true
+            )
+        ) { error in
+            guard let appError = error as? AppError else {
+                return XCTFail("Expected AppError.")
+            }
+            XCTAssertEqual(appError.message, "--model is required when using llama (path to .gguf).")
+        }
     }
 
     func testOpenAICompatibleRequiresAPIKey() {

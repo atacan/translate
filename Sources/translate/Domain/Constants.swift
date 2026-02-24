@@ -15,10 +15,15 @@ enum BuiltInDefaults {
 
     static let openAIModel = "gpt-4o-mini"
     static let anthropicModel = "claude-3-5-haiku-latest"
+    static let geminiModel = "gemini-2.5-flash"
+    static let openResponsesModel = "gpt-4o-mini"
     static let ollamaModel = "llama3.2"
+    static let mlxModel = "mlx-community/Llama-3.2-3B-Instruct-4bit"
 
     static let openAIBaseURL = "https://api.openai.com"
     static let anthropicBaseURL = "https://api.anthropic.com"
+    static let geminiBaseURL = "https://generativelanguage.googleapis.com"
+    static let openResponsesBaseURL = "https://api.openai.com/v1"
     static let ollamaBaseURL = "http://localhost:11434"
 
     static let sourceLanguagePlaceholder = "the source language"

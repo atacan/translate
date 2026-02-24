@@ -9,18 +9,23 @@ struct AnyLanguageModelTextProvider: TranslationProvider {
         case openai
         case openAICompatible
         case anthropic
+        case gemini
+        case openResponses
         case ollama
+        case coreml
+        case mlx
+        case llama
     }
 
     let id: ProviderID
     let backend: Backend
-    let baseURL: String
+    let baseURL: String?
     let model: String
     let apiKey: String?
 
     func translate(_ request: ProviderRequest) async throws -> ProviderResult {
         do {
-            let session = try makeSession(for: request)
+            let session = try await makeSession(for: request)
             let promptText = request.userPrompt ?? request.text
             let response = try await session.respond(to: promptText)
             let text = response.content
@@ -37,7 +42,7 @@ struct AnyLanguageModelTextProvider: TranslationProvider {
         AsyncThrowingStream { continuation in
             Task {
                 do {
-                    let session = try makeSession(for: request)
+                    let session = try await makeSession(for: request)
                     let promptText = request.userPrompt ?? request.text
                     let stream = session.streamResponse(to: promptText)
 
@@ -66,8 +71,8 @@ struct AnyLanguageModelTextProvider: TranslationProvider {
         }
     }
 
-    private func makeSession(for request: ProviderRequest) throws -> LanguageModelSession {
-        let model = try makeModel()
+    private func makeSession(for request: ProviderRequest) async throws -> LanguageModelSession {
+        let model = try await makeModel()
         let instructions = request.systemPrompt?.trimmingCharacters(in: .whitespacesAndNewlines)
         if let instructions, !instructions.isEmpty {
             return LanguageModelSession(model: model, instructions: instructions)
@@ -75,13 +80,15 @@ struct AnyLanguageModelTextProvider: TranslationProvider {
         return LanguageModelSession(model: model)
     }
 
-    private func makeModel() throws -> any LanguageModel {
+    private func makeModel() async throws -> any LanguageModel {
         let providerName = id.rawValue
 
         switch backend {
         case .openai, .openAICompatible:
-            guard let url = Self.normalizeBaseURL(baseURL, for: backend) else {
-                throw ProviderError.transport("Invalid base URL '\(baseURL)' for \(providerName) provider.")
+            guard let baseURL,
+                  let url = Self.normalizeBaseURL(baseURL, for: backend)
+            else {
+                throw ProviderError.transport("Invalid base URL '\(baseURL ?? "")' for \(providerName) provider.")
             }
             let token = apiKey ?? ""
             return OpenAILanguageModel(
@@ -92,8 +99,10 @@ struct AnyLanguageModelTextProvider: TranslationProvider {
             )
 
         case .anthropic:
-            guard let url = Self.normalizeBaseURL(baseURL, for: backend) else {
-                throw ProviderError.transport("Invalid base URL '\(baseURL)' for \(providerName) provider.")
+            guard let baseURL,
+                  let url = Self.normalizeBaseURL(baseURL, for: backend)
+            else {
+                throw ProviderError.transport("Invalid base URL '\(baseURL ?? "")' for \(providerName) provider.")
             }
             let token = apiKey ?? ""
             return AnthropicLanguageModel(
@@ -102,14 +111,67 @@ struct AnyLanguageModelTextProvider: TranslationProvider {
                 model: model
             )
 
+        case .gemini:
+            guard let baseURL,
+                  let url = Self.normalizeBaseURL(baseURL, for: backend)
+            else {
+                throw ProviderError.transport("Invalid base URL '\(baseURL ?? "")' for \(providerName) provider.")
+            }
+            let token = apiKey ?? ""
+            return GeminiLanguageModel(
+                baseURL: url,
+                apiKey: token,
+                model: model
+            )
+
+        case .openResponses:
+            guard let baseURL,
+                  let url = Self.normalizeBaseURL(baseURL, for: backend)
+            else {
+                throw ProviderError.transport("Invalid base URL '\(baseURL ?? "")' for \(providerName) provider.")
+            }
+            let token = apiKey ?? ""
+            return OpenResponsesLanguageModel(
+                baseURL: url,
+                apiKey: token,
+                model: model
+            )
+
         case .ollama:
-            guard let url = Self.normalizeBaseURL(baseURL, for: backend) else {
-                throw ProviderError.transport("Invalid base URL '\(baseURL)' for \(providerName) provider.")
+            guard let baseURL,
+                  let url = Self.normalizeBaseURL(baseURL, for: backend)
+            else {
+                throw ProviderError.transport("Invalid base URL '\(baseURL ?? "")' for \(providerName) provider.")
             }
             return OllamaLanguageModel(
                 baseURL: url,
                 model: model
             )
+
+        case .coreml:
+            #if canImport(Transformers)
+            if #available(macOS 15.0, *) {
+                return try await CoreMLLanguageModel(url: URL(fileURLWithPath: model))
+            } else {
+                throw ProviderError.unsupported("Error: Provider 'coreml' requires macOS 15.0 or later.")
+            }
+            #else
+            throw ProviderError.unsupported("Error: Provider 'coreml' is unavailable in this build (AnyLanguageModel CoreML trait not enabled).")
+            #endif
+
+        case .mlx:
+            #if canImport(MLXLLM)
+            return MLXLanguageModel(modelId: model)
+            #else
+            throw ProviderError.unsupported("Error: Provider 'mlx' is unavailable in this build (AnyLanguageModel MLX trait not enabled).")
+            #endif
+
+        case .llama:
+            #if canImport(LlamaSwift)
+            return LlamaLanguageModel(modelPath: model)
+            #else
+            throw ProviderError.unsupported("Error: Provider 'llama' is unavailable in this build (AnyLanguageModel Llama trait not enabled).")
+            #endif
         }
     }
 
@@ -153,6 +215,10 @@ struct AnyLanguageModelTextProvider: TranslationProvider {
             if segments.last == "v1" {
                 segments.removeLast()
             }
+        case .gemini, .openResponses:
+            break
+        case .coreml, .mlx, .llama:
+            return nil
         }
 
         if segments.isEmpty {

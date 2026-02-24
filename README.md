@@ -2,7 +2,7 @@
 
 `translate` is a command-line tool for translating text and files with configurable providers, prompt presets, and TOML-based configuration.
 
-LLM-backed providers (`openai`, `anthropic`, `ollama`, `openai-compatible`, and `apple-intelligence`) use [`AnyLanguageModel`](https://github.com/mattt/AnyLanguageModel) as the model/provider abstraction layer.
+LLM-backed providers (`openai`, `anthropic`, `gemini`, `open-responses`, `ollama`, `openai-compatible`, and `apple-intelligence`) use [`AnyLanguageModel`](https://github.com/mattt/AnyLanguageModel) as the model/provider abstraction layer.
 
 ## Installation
 
@@ -76,6 +76,20 @@ export ANTHROPIC_API_KEY="your_api_key"
 translate --provider anthropic --text --to en "Merhaba dunya"
 ```
 
+### Gemini
+
+```bash
+export GEMINI_API_KEY="your_api_key"
+translate --provider gemini --text --to en "Merhaba dunya"
+```
+
+### Open Responses
+
+```bash
+export OPEN_RESPONSES_API_KEY="your_api_key"
+translate --provider open-responses --text --to en "Merhaba dunya"
+```
+
 ### Ollama (local)
 
 ```bash
@@ -111,6 +125,7 @@ Notes:
 - `--base-url` without `--provider` automatically uses `openai-compatible`.
 - `openai-compatible` now requires an API key (some local endpoints may accept any placeholder string).
 - `--provider openai` and `--base-url` cannot be used together.
+- `--provider coreml`, `--provider mlx`, and `--provider llama` are available in the CLI surface, but local runtime support depends on building `AnyLanguageModel` with the corresponding traits (`CoreML`, `MLX`, `Llama`).
 - `apple-translate` and `apple-intelligence` are available on macOS 26+.
 
 ## Input Modes

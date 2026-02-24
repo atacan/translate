@@ -134,6 +134,58 @@ struct ProviderFactory {
                 warnings: []
             )
 
+        case .gemini:
+            let cfg = config.providers[id.rawValue]
+            let model = modelOverride ?? cfg?.model ?? BuiltInDefaults.geminiModel
+            let baseURL = baseURLOverride ?? cfg?.baseURL ?? BuiltInDefaults.geminiBaseURL
+            let apiKey = apiKeyOverride ?? cfg?.apiKey ?? env["GEMINI_API_KEY"]
+            guard !requireCredentials || (apiKey?.isEmpty == false) else {
+                throw AppError.runtime("Error: GEMINI_API_KEY is required for provider 'gemini'.")
+            }
+
+            return ProviderSelection(
+                name: id.rawValue,
+                id: id,
+                provider: AnyLanguageModelTextProvider(
+                    id: id,
+                    backend: .gemini,
+                    baseURL: baseURL,
+                    model: model,
+                    apiKey: apiKey
+                ),
+                model: model,
+                baseURL: baseURL,
+                apiKey: apiKey,
+                promptless: false,
+                warnings: []
+            )
+
+        case .openResponses:
+            let cfg = config.providers[id.rawValue]
+            let model = modelOverride ?? cfg?.model ?? BuiltInDefaults.openResponsesModel
+            let baseURL = baseURLOverride ?? cfg?.baseURL ?? BuiltInDefaults.openResponsesBaseURL
+            let apiKey = apiKeyOverride ?? cfg?.apiKey ?? env["OPEN_RESPONSES_API_KEY"]
+            guard !requireCredentials || (apiKey?.isEmpty == false) else {
+                throw AppError.runtime("Error: OPEN_RESPONSES_API_KEY is required for provider 'open-responses'.")
+            }
+
+            return ProviderSelection(
+                name: id.rawValue,
+                id: id,
+                provider: AnyLanguageModelTextProvider(
+                    id: id,
+                    backend: .openResponses,
+                    baseURL: baseURL,
+                    model: model,
+                    apiKey: apiKey
+                ),
+                model: model,
+                baseURL: baseURL,
+                apiKey: apiKey,
+                promptless: false,
+                warnings: []
+            )
+
         case .ollama:
             if explicitProvider && baseURLOverride != nil {
                 throw AppError.invalidArguments("--base-url cannot be used with --provider ollama. It is only valid for openai-compatible providers.")
@@ -153,6 +205,88 @@ struct ProviderFactory {
                 ),
                 model: model,
                 baseURL: baseURL,
+                apiKey: nil,
+                promptless: false,
+                warnings: []
+            )
+
+        case .coreml:
+            if explicitProvider && baseURLOverride != nil {
+                throw AppError.invalidArguments("--base-url cannot be used with --provider coreml.")
+            }
+            if apiKeyOverride != nil {
+                throw AppError.invalidArguments("--api-key is not applicable for coreml.")
+            }
+            let cfg = config.providers[id.rawValue]
+            guard let model = modelOverride ?? cfg?.model, !model.isEmpty else {
+                throw AppError.invalidArguments("--model is required when using coreml (path to .mlmodelc).")
+            }
+            return ProviderSelection(
+                name: id.rawValue,
+                id: id,
+                provider: AnyLanguageModelTextProvider(
+                    id: id,
+                    backend: .coreml,
+                    baseURL: nil,
+                    model: model,
+                    apiKey: nil
+                ),
+                model: model,
+                baseURL: nil,
+                apiKey: nil,
+                promptless: false,
+                warnings: []
+            )
+
+        case .mlx:
+            if explicitProvider && baseURLOverride != nil {
+                throw AppError.invalidArguments("--base-url cannot be used with --provider mlx.")
+            }
+            if apiKeyOverride != nil {
+                throw AppError.invalidArguments("--api-key is not applicable for mlx.")
+            }
+            let cfg = config.providers[id.rawValue]
+            let model = modelOverride ?? cfg?.model ?? BuiltInDefaults.mlxModel
+            return ProviderSelection(
+                name: id.rawValue,
+                id: id,
+                provider: AnyLanguageModelTextProvider(
+                    id: id,
+                    backend: .mlx,
+                    baseURL: nil,
+                    model: model,
+                    apiKey: nil
+                ),
+                model: model,
+                baseURL: nil,
+                apiKey: nil,
+                promptless: false,
+                warnings: []
+            )
+
+        case .llama:
+            if explicitProvider && baseURLOverride != nil {
+                throw AppError.invalidArguments("--base-url cannot be used with --provider llama.")
+            }
+            if apiKeyOverride != nil {
+                throw AppError.invalidArguments("--api-key is not applicable for llama.")
+            }
+            let cfg = config.providers[id.rawValue]
+            guard let model = modelOverride ?? cfg?.model, !model.isEmpty else {
+                throw AppError.invalidArguments("--model is required when using llama (path to .gguf).")
+            }
+            return ProviderSelection(
+                name: id.rawValue,
+                id: id,
+                provider: AnyLanguageModelTextProvider(
+                    id: id,
+                    backend: .llama,
+                    baseURL: nil,
+                    model: model,
+                    apiKey: nil
+                ),
+                model: model,
+                baseURL: nil,
                 apiKey: nil,
                 promptless: false,
                 warnings: []
