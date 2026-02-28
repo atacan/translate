@@ -153,6 +153,12 @@ Single file to stdout:
 translate --to de docs/input.md
 ```
 
+Single file to stdout with streaming enabled:
+
+```bash
+translate --stream --to de docs/input.md
+```
+
 Single file to explicit output path:
 
 ```bash

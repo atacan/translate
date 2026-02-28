@@ -118,7 +118,7 @@ If a positional argument is given and `--text` is not set:
 
 When input is inline text, stdin, or a single file provided as an explicit path (not a glob), the translated result is printed to stdout with a trailing newline.
 
-**Streaming:** When the output destination is stdout and the provider supports streaming, the tool streams the response as it arrives, providing a better interactive experience. When the output destination is a file (`--output`, `--in-place`, or multi-file / glob mode), the tool buffers the full response before writing to avoid leaving a partial file if the stream fails midway.
+**Streaming:** When `--stream` is passed, the output destination is stdout, and the provider supports streaming, the tool streams the response as it arrives. When `--stream` is not passed, or when the output destination is a file (`--output`, `--in-place`, or multi-file / glob mode), the tool buffers the full response before writing. If `--stream` is passed with a non-stdout output mode, the tool emits a warning and continues with buffered output.
 
 ### 3.2 `--output <FILE>` (Single Explicit File or Inline Text / Stdin Only)
 
@@ -206,6 +206,7 @@ If any files failed, the exit code is `1` even if other files succeeded. Success
 | `--output` | `-o` | `FILE` | | Write output to file. Single explicit file or inline text/stdin only. |
 | `--in-place` | `-i` | flag | false | Overwrite input file(s) with translation. File input only. |
 | `--suffix` | | `STRING` | `_{TO}` | Custom output filename suffix (before the final extension). Multi-file or glob mode only. |
+| `--stream` | | flag | false | Stream translated output to stdout as it arrives. Only meaningful when output is stdout; otherwise ignored with a warning. |
 | `--yes` | `-y` | flag | false | Skip all confirmation prompts. |
 | `--jobs` | `-j` | `INT` | `1` | Number of files to translate in parallel. Only meaningful for file input with multiple files. Ignored (with a warning) for inline text and stdin. |
 
@@ -942,6 +943,7 @@ OUTPUT:
   -i, --in-place            Overwrite input file(s) in place [file input only]
       --suffix <SUFFIX>     Output filename suffix before the final extension
                             [default for multiple files/globs: _{TO}, e.g. document_FR.md]
+      --stream              Stream translated output as it arrives [stdout only]
   -y, --yes                 Skip all confirmation prompts
   -j, --jobs <N>            Files to translate in parallel [default: 1]
 
@@ -1023,7 +1025,7 @@ This section contains implementation guidance. It does not affect the user-facin
 
 **Parallelism (`--jobs`):** Use a bounded thread pool or async task pool when `--jobs > 1`. Parallel requests may hit provider rate limits faster; this is documented behavior and the responsibility of the user when increasing `--jobs`.
 
-**Streaming:** Use the provider's streaming API when output is going to stdout, for a better interactive experience. Buffer the full response before writing when output is going to a file, to prevent partial writes on stream failure.
+**Streaming:** Use the provider's streaming API only when `--stream` is enabled and output is going to stdout. Buffer the full response before writing when `--stream` is disabled or output is going to a file, to prevent partial writes on stream failure.
 
 **Config file permissions:** Create the config file with `0600` permissions on Unix/macOS. This is a security measure since the file may contain API keys.
 

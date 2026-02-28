@@ -34,6 +34,7 @@ OUTPUT:
   -i, --in-place            Overwrite input file(s) in place [file input only]
       --suffix <SUFFIX>     Output filename suffix before the final extension
                             [default for multiple files/globs: _{TO}, e.g. document_FR.md]
+      --stream              Stream translated output as it arrives [stdout only]
   -y, --yes                 Skip all confirmation prompts
   -j, --jobs <N>            Files to translate in parallel [default: 1]
 

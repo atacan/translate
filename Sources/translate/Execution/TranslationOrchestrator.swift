@@ -69,6 +69,9 @@ struct TranslationOrchestrator {
             )
         )
         outputPlan.warnings.forEach { terminal.warn($0.replacingOccurrences(of: "Warning: ", with: "")) }
+        if options.stream && !outputPlan.mode.isStdout {
+            terminal.warn("--stream has no effect unless output is stdout.")
+        }
 
         let promptRenderer = PromptRenderer()
         let resolveExecutionContext = { (requireCredentials: Bool) throws -> (ProviderSelection, ResolvedPromptSet) in
@@ -142,7 +145,7 @@ struct TranslationOrchestrator {
                 to: to,
                 network: config.network,
                 terminal: terminal,
-                streamToStdout: outputPlan.mode.isStdout
+                streamToStdout: options.stream && outputPlan.mode.isStdout
             )
 
             let writer = OutputWriter(terminal: terminal, prompter: ConfirmationPrompter(terminal: terminal, assumeYes: assumeYes))
@@ -203,7 +206,7 @@ struct TranslationOrchestrator {
                 to: to,
                 network: config.network,
                 terminal: terminal,
-                streamToStdout: outputPlan.mode.isStdout
+                streamToStdout: options.stream && outputPlan.mode.isStdout
             )
 
             let writer = OutputWriter(terminal: terminal, prompter: ConfirmationPrompter(terminal: terminal, assumeYes: assumeYes))
@@ -376,7 +379,8 @@ struct TranslationOrchestrator {
                         model: providerSelection.model,
                         verbose: global.verbose,
                         terminal: terminal,
-                        network: config.network
+                        network: config.network,
+                        shouldStreamToStdout: options.stream
                     ))
                 }
             }
@@ -415,7 +419,8 @@ struct TranslationOrchestrator {
         model: String?,
         verbose: Bool,
         terminal: TerminalIO,
-        network: NetworkRuntimeConfig
+        network: NetworkRuntimeConfig,
+        shouldStreamToStdout: Bool
     ) async throws -> TranslationFileResult {
         guard let text = inspection.content else {
             return TranslationFileResult(file: inspection.file, destination: nil, success: false, errorMessage: inspection.error)
@@ -443,7 +448,7 @@ struct TranslationOrchestrator {
                 to: to,
                 network: network,
                 terminal: terminal,
-                streamToStdout: outputMode.isStdout
+                streamToStdout: shouldStreamToStdout && outputMode.isStdout
             )
             if result.strippedFence, verbose {
                 terminal.info("Stripped wrapping code fence from LLM response.")

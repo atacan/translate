@@ -28,6 +28,9 @@ struct TranslateOptions: ParsableArguments {
     @Option(name: .long, help: "Output filename suffix.")
     var suffix: String?
 
+    @Flag(name: .long, help: "Stream translated output to stdout as it arrives.")
+    var stream = false
+
     @Flag(name: [.short, .long], help: "Skip confirmation prompts.")
     var yes = false
 
