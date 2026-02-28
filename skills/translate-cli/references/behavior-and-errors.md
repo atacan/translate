@@ -46,8 +46,11 @@
 
 ## Streaming behavior
 
-- Stdout mode may stream from providers that support streaming.
+- Stdout mode may stream from providers that support streaming when streaming is enabled.
 - File output modes buffer response first, then write.
+- Streaming is enabled by `--stream` or by `defaults.stream = true`.
+- `--no-stream` disables streaming for the current command, even if config enables it.
+- Both flags are needed because global config and one-off command overrides are separate concerns.
 - Wrapping markdown code fences from model output are stripped before final output.
 
 ## `.xcstrings` behavior
@@ -65,6 +68,7 @@
 - `--output can only be used with a single input.`
 - `--in-place and --output cannot be used together.`
 - `--in-place and --suffix cannot be used together.`
+- `--stream and --no-stream cannot be used together.`
 - `--verbose and --quiet cannot be used together.`
 
 ## Exit codes

@@ -159,6 +159,12 @@ Single file to stdout with streaming enabled:
 translate --stream --to de docs/input.md
 ```
 
+Streaming control note:
+
+- `--stream` forces streaming on for the current command.
+- `--no-stream` forces streaming off for the current command.
+- They are both needed because `defaults.stream` can enable streaming globally in `config.toml`, and each command still needs a direct way to override that default in either direction.
+
 Single file to explicit output path:
 
 ```bash
@@ -280,9 +286,17 @@ Set and unset values:
 ```bash
 translate config set defaults.provider anthropic
 translate config set defaults.to fr
+translate config set defaults.stream true
 translate config set defaults.jobs 4
 translate config unset defaults.jobs
 ```
+
+Why both `--stream` and `--no-stream` exist:
+
+- Config can set a global default with `defaults.stream = true` or `false`.
+- `--stream` is the per-command override that forces streaming on.
+- `--no-stream` is the per-command override that forces streaming off.
+- Without both flags, users with a global preference would lose the ability to invert it for one command without editing config.
 
 Edit in `$EDITOR`:
 
@@ -299,6 +313,7 @@ from = "auto"
 to = "en"
 preset = "general"
 format = "auto"
+stream = false
 yes = false
 jobs = 1
 

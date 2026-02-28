@@ -40,6 +40,7 @@ from = "auto"
 to = "en"
 preset = "general"
 format = "auto"
+stream = false
 yes = false
 jobs = 1
 
@@ -91,7 +92,9 @@ format = "markdown"
 ## Config key usage helpers
 
 - Read key: `translate config get defaults.provider`
+- Read stream default: `translate config get defaults.stream`
 - Set scalar key: `translate config set defaults.jobs 4`
+- Set stream default: `translate config set defaults.stream true`
 - Remove key: `translate config unset defaults.jobs`
 - Edit full file: `translate config edit`
 - Print effective config (built-ins merged): `translate config show`
@@ -110,3 +113,5 @@ Use `config edit` for complex TOML values or large preset blocks.
 - Config file is written as UTF-8.
 - On macOS, new config files are created with `0600` permissions.
 - Named openai-compatible endpoints that collide with built-in provider names emit warnings and are ignored.
+- Streaming precedence is: `--no-stream` > `--stream` > `[defaults].stream` > built-in default (`false`).
+- Both `--stream` and `--no-stream` exist because the config file can set a global default, and users still need a one-command override in either direction.

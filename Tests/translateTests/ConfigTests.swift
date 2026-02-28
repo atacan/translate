@@ -27,6 +27,17 @@ final class ConfigTests: XCTestCase {
         XCTAssertTrue(warnings[0].contains("Named endpoint 'openai'"))
     }
 
+    func testDefaultsStreamConfigIsResolvedAndIncludedInEffectiveConfig() {
+        let table = TOMLTable()
+        ConfigKeyPath.set(table: table, key: "defaults.stream", value: true)
+
+        let resolved = ConfigResolver().resolve(path: URL(fileURLWithPath: "/tmp/config.toml"), table: table)
+        XCTAssertTrue(resolved.defaultsStream)
+
+        let effectiveDefaults = ConfigResolver().effectiveConfigTable(resolved)["defaults"]?.table
+        XCTAssertEqual(effectiveDefaults?["stream"]?.bool, true)
+    }
+
     func testConfigLocatorPrefersCLIOverEnvironment() {
         let resolved = ConfigLocator.resolvedConfigPath(
             cli: "/tmp/from-cli.toml",

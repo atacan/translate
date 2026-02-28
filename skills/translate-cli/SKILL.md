@@ -17,6 +17,7 @@ Use this skill to help end users run and configure the `translate` CLI.
 - Configure defaults, provider endpoints, network settings, and presets with `translate config` and `config.toml`.
 - Customize prompts with presets, inline templates, `@file` templates, and placeholders.
 - Explain output behavior (`stdout`, `--output`, `--in-place`, suffix naming), parallel jobs, dry-run, and validation errors.
+- Streaming output: `--stream` forces on, `--no-stream` forces off, otherwise `defaults.stream` applies.
 
 ## Starter commands
 

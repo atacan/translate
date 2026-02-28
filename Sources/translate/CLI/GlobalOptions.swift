@@ -31,6 +31,9 @@ struct TranslateOptions: ParsableArguments {
     @Flag(name: .long, help: "Stream translated output to stdout as it arrives.")
     var stream = false
 
+    @Flag(name: .long, help: "Disable streaming for this command, overriding config defaults.")
+    var noStream = false
+
     @Flag(name: [.short, .long], help: "Skip confirmation prompts.")
     var yes = false
 

@@ -118,7 +118,7 @@ If a positional argument is given and `--text` is not set:
 
 When input is inline text, stdin, or a single file provided as an explicit path (not a glob), the translated result is printed to stdout with a trailing newline.
 
-**Streaming:** When `--stream` is passed, the output destination is stdout, and the provider supports streaming, the tool streams the response as it arrives. When `--stream` is not passed, or when the output destination is a file (`--output`, `--in-place`, or multi-file / glob mode), the tool buffers the full response before writing. If `--stream` is passed with a non-stdout output mode, the tool emits a warning and continues with buffered output.
+**Streaming:** When streaming is enabled, the output destination is stdout, and the provider supports streaming, the tool streams the response as it arrives. Streaming is enabled when `--stream` is passed, or when `defaults.stream = true` in config and `--no-stream` is not passed. When streaming is not enabled, or when the output destination is a file (`--output`, `--in-place`, or multi-file / glob mode), the tool buffers the full response before writing. If `--stream` is passed with a non-stdout output mode, the tool emits a warning and continues with buffered output.
 
 ### 3.2 `--output <FILE>` (Single Explicit File or Inline Text / Stdin Only)
 
@@ -207,6 +207,7 @@ If any files failed, the exit code is `1` even if other files succeeded. Success
 | `--in-place` | `-i` | flag | false | Overwrite input file(s) with translation. File input only. |
 | `--suffix` | | `STRING` | `_{TO}` | Custom output filename suffix (before the final extension). Multi-file or glob mode only. |
 | `--stream` | | flag | false | Stream translated output to stdout as it arrives. Only meaningful when output is stdout; otherwise ignored with a warning. |
+| `--no-stream` | | flag | false | Disable streaming for this command. Use to override `defaults.stream = true` in config. |
 | `--yes` | `-y` | flag | false | Skip all confirmation prompts. |
 | `--jobs` | `-j` | `INT` | `1` | Number of files to translate in parallel. Only meaningful for file input with multiple files. Ignored (with a warning) for inline text and stdin. |
 
@@ -553,6 +554,7 @@ from     = "auto"            # Default source language
 to       = "en"              # Default target language
 preset   = "general"         # Default preset name
 format   = "auto"            # Default format hint
+stream   = false             # Enable streaming by default for stdout output
 yes      = false             # Skip confirmation prompts globally
 jobs     = 1                 # Default parallelism for multi-file translation
 
@@ -639,6 +641,7 @@ Keys use dot notation:
 ```
 translate config set defaults.provider anthropic
 translate config set defaults.to fr
+translate config set defaults.stream true
 translate config set providers.anthropic.model claude-opus-4-5
 translate config set providers.ollama.base_url http://192.168.1.10:11434
 translate config set network.timeout_seconds 60
@@ -692,6 +695,7 @@ USER-DEFINED PRESETS (in ~/.config/translate/config.toml)
 | `--in-place` + inline text or stdin | `"--in-place requires file input."` |
 | `--in-place` + `--output` | `"--in-place and --output cannot be used together."` |
 | `--in-place` + `--suffix` | `"--in-place and --suffix cannot be used together. --in-place overwrites the original file; --suffix creates a new file."` |
+| `--stream` + `--no-stream` | `"--stream and --no-stream cannot be used together."` |
 | `--model` + `apple-translate` or `deepl` | `"--model is not applicable for <provider>. This provider does not use a model."` |
 | `--api-key` + `apple-translate` or `apple-intelligence` | `"--api-key is not applicable for <provider>."` |
 | `--base-url` given alongside an explicit non-`openai-compatible` built-in `--provider` | `"--base-url cannot be used with --provider <name>. It is only valid for openai-compatible providers."` |
@@ -944,6 +948,7 @@ OUTPUT:
       --suffix <SUFFIX>     Output filename suffix before the final extension
                             [default for multiple files/globs: _{TO}, e.g. document_FR.md]
       --stream              Stream translated output as it arrives [stdout only]
+      --no-stream           Disable streaming for this command
   -y, --yes                 Skip all confirmation prompts
   -j, --jobs <N>            Files to translate in parallel [default: 1]
 
@@ -1025,7 +1030,7 @@ This section contains implementation guidance. It does not affect the user-facin
 
 **Parallelism (`--jobs`):** Use a bounded thread pool or async task pool when `--jobs > 1`. Parallel requests may hit provider rate limits faster; this is documented behavior and the responsibility of the user when increasing `--jobs`.
 
-**Streaming:** Use the provider's streaming API only when `--stream` is enabled and output is going to stdout. Buffer the full response before writing when `--stream` is disabled or output is going to a file, to prevent partial writes on stream failure.
+**Streaming:** Use the provider's streaming API only when streaming is enabled and output is going to stdout. Streaming is enabled by `--stream` or by `defaults.stream = true`, and `--no-stream` disables it for the current command. Buffer the full response before writing when streaming is disabled or output is going to a file, to prevent partial writes on stream failure.
 
 **Config file permissions:** Create the config file with `0600` permissions on Unix/macOS. This is a security measure since the file may contain API keys.
 

@@ -43,6 +43,12 @@ echo "Merhaba dunya" | translate --to en
 translate --to de docs/input.md
 ```
 
+## Stream one stdout translation explicitly
+
+```bash
+translate --stream --to de docs/input.md
+```
+
 ## Translate one file to a destination file
 
 ```bash
@@ -105,8 +111,16 @@ translate --preset xcode-strings --to fr Localizable.xcstrings
 ```bash
 translate config set defaults.provider anthropic
 translate config set defaults.to fr
+translate config set defaults.stream true
 translate config set defaults.jobs 4
 ```
+
+## Streaming override model
+
+- Use `translate config set defaults.stream true` to make streaming the default.
+- Use `--stream` to force it on for one command.
+- Use `--no-stream` to force it off for one command.
+- The two flags are not redundant: they exist so a global default can still be overridden in either direction without editing config.
 
 ## Provider quick setup
 

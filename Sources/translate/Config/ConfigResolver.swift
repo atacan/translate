@@ -8,6 +8,7 @@ struct ConfigResolver {
         let defaultsTo = string(in: table, at: ["defaults", "to"]) ?? BuiltInDefaults.to
         let defaultsPreset = string(in: table, at: ["defaults", "preset"]) ?? BuiltInDefaults.preset
         let defaultsFormat = FormatHint(rawValue: string(in: table, at: ["defaults", "format"]) ?? BuiltInDefaults.format) ?? .auto
+        let defaultsStream = bool(in: table, at: ["defaults", "stream"]) ?? BuiltInDefaults.stream
         let defaultsYes = bool(in: table, at: ["defaults", "yes"]) ?? BuiltInDefaults.yes
         let defaultsJobs = int(in: table, at: ["defaults", "jobs"]) ?? BuiltInDefaults.jobs
 
@@ -32,6 +33,7 @@ struct ConfigResolver {
             defaultsTo: defaultsTo,
             defaultsPreset: defaultsPreset,
             defaultsFormat: defaultsFormat,
+            defaultsStream: defaultsStream,
             defaultsYes: defaultsYes,
             defaultsJobs: max(1, defaultsJobs),
             network: network,
@@ -60,6 +62,7 @@ struct ConfigResolver {
         defaults["to"] = config.defaultsTo
         defaults["preset"] = config.defaultsPreset
         defaults["format"] = config.defaultsFormat.rawValue
+        defaults["stream"] = config.defaultsStream
         defaults["yes"] = config.defaultsYes
         defaults["jobs"] = config.defaultsJobs
         out["defaults"] = defaults

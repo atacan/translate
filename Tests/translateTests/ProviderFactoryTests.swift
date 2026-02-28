@@ -278,6 +278,7 @@ final class ProviderFactoryTests: XCTestCase {
             defaultsTo: "en",
             defaultsPreset: "general",
             defaultsFormat: .auto,
+            defaultsStream: false,
             defaultsYes: false,
             defaultsJobs: 1,
             network: NetworkRuntimeConfig(timeoutSeconds: 120, retries: 3, retryBaseDelaySeconds: 1),

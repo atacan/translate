@@ -35,6 +35,7 @@ OUTPUT:
       --suffix <SUFFIX>     Output filename suffix before the final extension
                             [default for multiple files/globs: _{TO}, e.g. document_FR.md]
       --stream              Stream translated output as it arrives [stdout only]
+      --no-stream           Disable streaming for this command
   -y, --yes                 Skip all confirmation prompts
   -j, --jobs <N>            Files to translate in parallel [default: 1]
 

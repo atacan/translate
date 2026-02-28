@@ -7,6 +7,9 @@ struct TranslationOrchestrator {
         if global.verbose && global.quiet {
             throw AppError.invalidArguments("--verbose and --quiet cannot be used together.")
         }
+        if options.stream && options.noStream {
+            throw AppError.invalidArguments("--stream and --no-stream cannot be used together.")
+        }
 
         let cwd = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
         let env = ProcessInfo.processInfo.environment
@@ -41,6 +44,7 @@ struct TranslationOrchestrator {
         let formatHint = options.format ?? (FormatHint(rawValue: preset.format ?? "") ?? config.defaultsFormat)
         let jobs = max(1, options.jobs ?? config.defaultsJobs)
         let assumeYes = options.yes || config.defaultsYes
+        let streamEnabled = options.noStream ? false : (options.stream ? true : config.defaultsStream)
 
         let inputMode = try await InputResolver().resolve(
             positional: options.input,
@@ -145,7 +149,7 @@ struct TranslationOrchestrator {
                 to: to,
                 network: config.network,
                 terminal: terminal,
-                streamToStdout: options.stream && outputPlan.mode.isStdout
+                streamToStdout: streamEnabled && outputPlan.mode.isStdout
             )
 
             let writer = OutputWriter(terminal: terminal, prompter: ConfirmationPrompter(terminal: terminal, assumeYes: assumeYes))
@@ -206,7 +210,7 @@ struct TranslationOrchestrator {
                 to: to,
                 network: config.network,
                 terminal: terminal,
-                streamToStdout: options.stream && outputPlan.mode.isStdout
+                streamToStdout: streamEnabled && outputPlan.mode.isStdout
             )
 
             let writer = OutputWriter(terminal: terminal, prompter: ConfirmationPrompter(terminal: terminal, assumeYes: assumeYes))
@@ -380,7 +384,7 @@ struct TranslationOrchestrator {
                         verbose: global.verbose,
                         terminal: terminal,
                         network: config.network,
-                        shouldStreamToStdout: options.stream
+                        shouldStreamToStdout: streamEnabled
                     ))
                 }
             }

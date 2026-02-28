@@ -92,6 +92,7 @@ struct ResolvedConfig {
     let defaultsTo: String
     let defaultsPreset: String
     let defaultsFormat: FormatHint
+    let defaultsStream: Bool
     let defaultsYes: Bool
     let defaultsJobs: Int
 

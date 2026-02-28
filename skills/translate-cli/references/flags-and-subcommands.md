@@ -16,6 +16,8 @@ Note: with the current parser shape, place options before positional input(s) fo
 - `-o, --output <FILE>`: write result to a file (single explicit file or inline/stdin only).
 - `-i, --in-place`: overwrite input file(s) in place (file input only).
 - `--suffix <SUFFIX>`: output filename suffix for per-file output naming.
+- `--stream`: force streaming on for this command (stdout only).
+- `--no-stream`: force streaming off for this command.
 - `-y, --yes`: skip confirmations.
 - `-j, --jobs <N>`: parallel file translations.
 
@@ -68,7 +70,9 @@ Accepted language forms: language names (`French`), ISO 639-1 (`fr`), and BCP 47
 ## Important constraints
 
 - `--verbose` and `--quiet` cannot be combined.
+- `--stream` and `--no-stream` cannot be combined.
 - `--in-place` cannot be combined with `--output`.
 - `--in-place` cannot be combined with `--suffix`.
 - `--output` cannot be used with multi-file or glob input.
 - `--jobs` warns and has no effect for inline text or stdin.
+- `--stream` and `--no-stream` are intentionally both available because config may set `defaults.stream`, and each command needs an explicit override in either direction.

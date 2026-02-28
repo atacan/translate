@@ -10,6 +10,7 @@ enum BuiltInDefaults {
     static let to = "en"
     static let preset = "general"
     static let format = "auto"
+    static let stream = false
     static let yes = false
     static let jobs = 1
 
