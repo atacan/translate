@@ -18,7 +18,6 @@ enum BuiltInDefaults {
     static let geminiModel = "gemini-2.5-flash"
     static let openResponsesModel = "gpt-4o-mini"
     static let ollamaModel = "llama3.2"
-    static let mlxModel = "mlx-community/Llama-3.2-3B-Instruct-4bit"
 
     static let openAIBaseURL = "https://api.openai.com"
     static let anthropicBaseURL = "https://api.anthropic.com"

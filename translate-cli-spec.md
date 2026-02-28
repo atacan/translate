@@ -953,7 +953,7 @@ LANGUAGES:
 
 PROVIDER:
   -p, --provider <name>     openai | anthropic | gemini | open-responses |
-                            ollama | openai-compatible | coreml | mlx | llama |
+                            ollama | openai-compatible |
                             apple-intelligence | apple-translate | deepl |
                             <named-endpoint-from-config>
                             [default: openai, or value from config]

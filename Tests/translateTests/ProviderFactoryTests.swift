@@ -77,56 +77,6 @@ final class ProviderFactoryTests: XCTestCase {
         XCTAssertNil(selection.apiKey)
     }
 
-    func testMLXResolvesWithoutAPIKey() throws {
-        let factory = ProviderFactory(config: makeConfig(), env: [:])
-        let selection = try factory.make(
-            providerName: ProviderID.mlx.rawValue,
-            modelOverride: nil,
-            baseURLOverride: nil,
-            apiKeyOverride: nil,
-            explicitProvider: true
-        )
-
-        XCTAssertEqual(selection.provider.id, .mlx)
-        XCTAssertNotNil(selection.model)
-    }
-
-    func testCoreMLRequiresModelPath() {
-        let factory = ProviderFactory(config: makeConfig(), env: [:])
-        XCTAssertThrowsError(
-            try factory.make(
-                providerName: ProviderID.coreml.rawValue,
-                modelOverride: nil,
-                baseURLOverride: nil,
-                apiKeyOverride: nil,
-                explicitProvider: true
-            )
-        ) { error in
-            guard let appError = error as? AppError else {
-                return XCTFail("Expected AppError.")
-            }
-            XCTAssertEqual(appError.message, "--model is required when using coreml (path to .mlmodelc).")
-        }
-    }
-
-    func testLlamaRequiresModelPath() {
-        let factory = ProviderFactory(config: makeConfig(), env: [:])
-        XCTAssertThrowsError(
-            try factory.make(
-                providerName: ProviderID.llama.rawValue,
-                modelOverride: nil,
-                baseURLOverride: nil,
-                apiKeyOverride: nil,
-                explicitProvider: true
-            )
-        ) { error in
-            guard let appError = error as? AppError else {
-                return XCTFail("Expected AppError.")
-            }
-            XCTAssertEqual(appError.message, "--model is required when using llama (path to .gguf).")
-        }
-    }
-
     func testOpenAICompatibleRequiresAPIKey() {
         let factory = ProviderFactory(config: makeConfig(), env: [:])
         XCTAssertThrowsError(

@@ -12,9 +12,6 @@ struct AnyLanguageModelTextProvider: TranslationProvider {
         case gemini
         case openResponses
         case ollama
-        case coreml
-        case mlx
-        case llama
     }
 
     let id: ProviderID
@@ -148,30 +145,6 @@ struct AnyLanguageModelTextProvider: TranslationProvider {
                 model: model
             )
 
-        case .coreml:
-            #if canImport(Transformers)
-            if #available(macOS 15.0, *) {
-                return try await CoreMLLanguageModel(url: URL(fileURLWithPath: model))
-            } else {
-                throw ProviderError.unsupported("Error: Provider 'coreml' requires macOS 15.0 or later.")
-            }
-            #else
-            throw ProviderError.unsupported("Error: Provider 'coreml' is unavailable in this build (AnyLanguageModel CoreML trait not enabled).")
-            #endif
-
-        case .mlx:
-            #if canImport(MLXLLM)
-            return MLXLanguageModel(modelId: model)
-            #else
-            throw ProviderError.unsupported("Error: Provider 'mlx' is unavailable in this build (AnyLanguageModel MLX trait not enabled).")
-            #endif
-
-        case .llama:
-            #if canImport(LlamaSwift)
-            return LlamaLanguageModel(modelPath: model)
-            #else
-            throw ProviderError.unsupported("Error: Provider 'llama' is unavailable in this build (AnyLanguageModel Llama trait not enabled).")
-            #endif
         }
     }
 
@@ -217,8 +190,6 @@ struct AnyLanguageModelTextProvider: TranslationProvider {
             }
         case .gemini, .openResponses:
             break
-        case .coreml, .mlx, .llama:
-            return nil
         }
 
         if segments.isEmpty {

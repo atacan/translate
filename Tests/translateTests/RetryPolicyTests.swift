@@ -1,5 +1,8 @@
 import XCTest
 import Foundation
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
 @testable import translate
 
 final class RetryPolicyTests: XCTestCase {

@@ -125,7 +125,6 @@ Notes:
 - `--base-url` without `--provider` automatically uses `openai-compatible`.
 - `openai-compatible` now requires an API key (some local endpoints may accept any placeholder string).
 - `--provider openai` and `--base-url` cannot be used together.
-- `--provider coreml`, `--provider mlx`, and `--provider llama` are available in the CLI surface, but local runtime support depends on building `AnyLanguageModel` with the corresponding traits (`CoreML`, `MLX`, `Llama`).
 - `apple-translate` and `apple-intelligence` are available on macOS 26+.
 
 ## Input Modes

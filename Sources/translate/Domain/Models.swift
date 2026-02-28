@@ -9,9 +9,6 @@ enum ProviderID: String, CaseIterable, Sendable {
     case openResponses = "open-responses"
     case ollama
     case openAICompatible = "openai-compatible"
-    case coreml
-    case mlx
-    case llama
     case appleIntelligence = "apple-intelligence"
     case appleTranslate = "apple-translate"
     case deepl
