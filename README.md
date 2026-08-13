@@ -1,5 +1,7 @@
 # translate
 
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/atacan/translate)
+
 `translate` is a command-line tool for translating text and files with configurable providers, prompt presets, and TOML-based configuration.
 
 LLM-backed providers (`openai`, `anthropic`, `gemini`, `open-responses`, `ollama`, `openai-compatible`, and `apple-intelligence`) use [`AnyLanguageModel`](https://github.com/mattt/AnyLanguageModel) as the model/provider abstraction layer.
