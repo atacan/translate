@@ -31,6 +31,14 @@ sudo install -m 755 "$(swift build -c release --show-bin-path)/translate" /usr/l
 
 Release and Homebrew automation docs: `docs/release.md`
 
+### Install the coding agent skill
+
+The optional `translate-cli` skill provides usage guidance for coding agents. Install it with [`npx skills`](https://github.com/vercel-labs/skills):
+
+```bash
+npx skills add atacan/translate --skill translate-cli
+```
+
 ## Quick Start
 
 These examples assume you already configured a provider (see Provider Setup below).
