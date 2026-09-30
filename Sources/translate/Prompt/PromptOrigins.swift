@@ -12,6 +12,10 @@ struct PromptOrigins: Sendable {
     }
 
     static func resolve(preset: PresetDefinition, config: ResolvedConfig, options: TranslateOptions) -> Self {
+        resolve(preset: preset, config: config, systemOverride: options.systemPrompt, userOverride: options.userPrompt)
+    }
+
+    static func resolve(preset: PresetDefinition, config: ResolvedConfig, systemOverride: String? = nil, userOverride: String? = nil) -> Self {
         let userPreset = config.presets[preset.name]
         let fallbackName = BuiltInPresetStore.all()[preset.name] == nil ? BuiltInDefaults.preset : preset.name
         func origin(override: String?, inline: String?, file: String?) -> String {
@@ -23,8 +27,8 @@ struct PromptOrigins: Sendable {
             return "built-in preset \(fallbackName)"
         }
         return Self(
-            system: origin(override: options.systemPrompt, inline: userPreset?.systemPrompt, file: userPreset?.systemPromptFile),
-            user: origin(override: options.userPrompt, inline: userPreset?.userPrompt, file: userPreset?.userPromptFile)
+            system: origin(override: systemOverride, inline: userPreset?.systemPrompt, file: userPreset?.systemPromptFile),
+            user: origin(override: userOverride, inline: userPreset?.userPrompt, file: userPreset?.userPromptFile)
         )
     }
 }

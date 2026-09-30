@@ -16,6 +16,8 @@ translate presets show markdown
 translate presets which
 ```
 
+`presets list` marks locally overridden built-ins. `presets show` reports each field's effective origin and raw template. `presets which` reports the configured/text default without input inspection; catalogs can have the implicit `xcode-strings` default. Dry-run includes origins after CLI overrides.
+
 ## Prompt placeholders
 
 Templates support:
@@ -66,7 +68,7 @@ translate --text --to en \
 - Unsupported identifier-shaped tokens (for example `{target_language}`) warn once per token and remain literal. Ordinary JSON/CSS braces, malformed braces, and double-braced literals do not warn.
 - `--no-lang` does not bypass template validation or suppress unknown-token warnings.
 
-CLI overrides take precedence for each prompt field independently. Within a preset, `system_prompt` takes precedence over `system_prompt_file`; `user_prompt` takes precedence over `user_prompt_file`. A field without an override retains its preset or built-in fallback.
+CLI overrides take precedence for each prompt field independently. Within a preset, `system_prompt` takes precedence over `system_prompt_file`; `user_prompt` takes precedence over `user_prompt_file`. Missing fields of a same-named built-in preset fall back to that built-in; other custom names fall back to original built-in `general`, even if config customizes `general`. Relative TOML preset `*_prompt_file` paths resolve beside the containing config; CLI `@file` paths resolve from invocation cwd. Absolute and `~/` paths retain their semantics. Inactive or overridden files are never read.
 
 ## User-defined presets in TOML
 
@@ -83,6 +85,7 @@ format = "markdown"
 
 Supported keys inside `[presets.<name>]`:
 
+- `description` (optional inspection text)
 - `system_prompt`
 - `system_prompt_file`
 - `user_prompt`

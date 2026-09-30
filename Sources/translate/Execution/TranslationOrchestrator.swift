@@ -17,12 +17,10 @@ struct TranslationOrchestrator {
 
         let configPath = ConfigLocator.resolvedConfigPath(cli: global.config, env: env, cwd: cwd, home: home)
         let configStore = ConfigStore()
-        let configTable = try configStore.load(path: configPath)
+        let configTable = try configStore.load(path: configPath, requireExists: ConfigLocator.isExplicitlySelected(cli: global.config, env: env))
         let config = ConfigResolver().resolve(path: configPath, table: configTable)
 
-        for warning in ConfigResolver().namedProviderCollisionWarnings(config) {
-            terminal.warn(warning.replacingOccurrences(of: "Warning: ", with: ""))
-        }
+        emitConfigWarnings(config, terminal: terminal)
 
         let inputMode = try await InputResolver().resolve(
             positional: options.input,
@@ -137,6 +135,8 @@ struct TranslationOrchestrator {
                 )
             )
             if options.dryRun {
+                let origins = PromptOrigins.resolve(preset: preset, config: config, options: options)
+                terminal.writeStdout("Preset: \(activePresetName)\nSystem prompt origin: \(providerSelection.promptless ? "unused (promptless provider)" : origins.system)\nUser prompt origin: \(providerSelection.promptless ? "unused (promptless provider)" : origins.user)")
                 terminal.writeStdout(
                     DryRunPrinter.render(
                         provider: providerSelection.name,
@@ -198,6 +198,8 @@ struct TranslationOrchestrator {
                 )
             )
             if options.dryRun {
+                let origins = PromptOrigins.resolve(preset: preset, config: config, options: options)
+                terminal.writeStdout("Preset: \(activePresetName)\nSystem prompt origin: \(providerSelection.promptless ? "unused (promptless provider)" : origins.system)\nUser prompt origin: \(providerSelection.promptless ? "unused (promptless provider)" : origins.user)")
                 terminal.writeStdout(
                     DryRunPrinter.render(
                         provider: providerSelection.name,

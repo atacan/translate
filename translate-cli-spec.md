@@ -327,7 +327,7 @@ translate file.md --to fr --system-prompt "You are a formal legal translator. Tr
 translate file.md --to fr --system-prompt @~/prompts/legal_system.txt
 ```
 
-The file is read at invocation time. Relative paths are resolved from the current working directory. If the file does not exist: `"Error: Prompt file '<path>' not found."`
+The selected file is read at invocation time. CLI `@FILE` relative paths resolve from the invocation working directory. TOML preset `system_prompt_file` and `user_prompt_file` relative paths resolve beside the containing config file. Absolute and `~/` paths retain their semantics. If the file does not exist: `"Error: Prompt file '<path>' not found."`
 
 ### 5.5 Language Placeholder Warning
 
@@ -353,7 +353,7 @@ Only the outermost wrapping is stripped. Code blocks embedded within the transla
 
 ### 5.7 `--dry-run` Output
 
-When `--dry-run` is set, the tool prints to stdout and exits without calling any API:
+When `--dry-run` is set, the tool prints the selected preset and per-field prompt origins, followed by this preview, and exits without calling any API:
 
 ```
 === DRY RUN ===
@@ -420,9 +420,9 @@ to               = "en"
 system_prompt = "Translate {from} to {to}. Be extremely concise."
 ```
 
-All fields are optional. Unspecified fields fall back to the `general` built-in defaults. A preset with only `provider` set is valid.
+All fields are optional. Missing fields fall back to the matching built-in for same-named presets, or the original built-in `general` for other names. A preset with only `provider` set is valid. `description` is an optional string for inspection.
 
-**Shadowing built-ins:** A user-defined preset with the same name as a built-in (e.g. `[presets.general]`) takes precedence independently for each field, with missing fields falling back to that built-in. Differently named custom presets fall back to built-in `general`.
+**Shadowing built-ins:** A user-defined preset with the same name as a built-in (e.g. `[presets.general]`) takes precedence independently for each field, with missing fields falling back to that built-in. Differently named custom presets fall back to the original built-in `general`, even when `[presets.general]` is locally customized. CLI prompt replacement, inline-over-file precedence, and fallback apply independently to system and user fields; unused files are never loaded.
 
 ### 6.3 Preset Resolution Order
 
@@ -558,9 +558,9 @@ The following defaults apply to all HTTP-based providers. All values are configu
 
 Default path: `~/.config/translate/config.toml`
 
-Override with `--config <FILE>` or the `TRANSLATE_CONFIG` environment variable.
+Load exactly one file in this order: `--config <FILE>`, then `TRANSLATE_CONFIG`, then the default path. There is no automatic project config discovery, config stacking, or additional inheritance syntax.
 
-If the file does not exist, all built-in defaults apply. The file and any necessary parent directories are created automatically when `translate config set` is first run. On Unix/macOS, the file is created with permissions `0600` (owner read/write only) to protect API keys.
+A missing implicit default file uses built-in defaults. A nonexistent explicitly selected file fails translation and read-only `config show`, `config get`, and all `presets` inspection commands with a clear path error. `config path` can inspect a missing path. `config unset` on a missing file succeeds without creating it. The file and any necessary parent directories are created automatically by `translate config set` or `translate config edit`. Unknown top-level keys, unknown defaults/preset fields, wrong types, unsupported format values, and unknown default preset names produce actionable warnings naming keys without printing configured values; unsupported settings are ignored. On Unix/macOS, the file is created with permissions `0600` (owner read/write only) to protect API keys.
 
 ### 8.2 Full Schema
 
@@ -627,7 +627,7 @@ to       = "en"
 [presets.terse]
 system_prompt = "Translate {from} to {to}. Be extremely concise."
 
-[presets.xcode-custom]           # Shadow the built-in xcode-strings preset
+[presets.xcode-custom]           # Custom name: falls back to original built-in general
 system_prompt_file = "~/work/prompts/my_xcode_system.txt"
 # user_prompt not set → falls back to general built-in user prompt
 ```
@@ -651,7 +651,7 @@ translate config <action> [KEY] [VALUE]
 | `translate config set <key> <value>` | Set a config value. Creates the file and parent directories if they don't exist. |
 | `translate config get <key>` | Print the current value of a config key. |
 | `translate config unset <key>` | Remove a key from the config file, restoring it to its built-in default. |
-| `translate config edit` | Open the config file in `$EDITOR`. Falls back to `vi` on Unix/macOS, `notepad` on Windows if `$EDITOR` is not set. |
+| `translate config edit` | Create the selected file if missing, then open it in `$EDITOR`. Falls back to `vi` on Unix/macOS, `notepad` on Windows if `$EDITOR` is not set. |
 
 ### Key Format
 
@@ -678,9 +678,11 @@ translate presets <action> [NAME]
 
 | Command | Description |
 |---|---|
-| `translate presets list` | List all available presets (built-in and user-defined). Marks the active default with `*`. Indicates whether each is built-in or user-defined. |
+| `translate presets list` | List all available presets (built-in and user-defined). Marks the configured/text default with `*`. Marks locally overridden built-ins with `[overridden in config]`. |
 | `translate presets show <name>` | Print the raw system and user prompt templates for the named preset, with placeholders **intact** (not substituted with example values). This is useful for copying and customizing a built-in prompt. |
-| `translate presets which` | Print the name and source of the preset that would be active given current flags and config. |
+| `translate presets which` | Print the name and source of the configured/text default preset. Without input inspection, this cannot select the implicit catalog `xcode-strings` default. |
+
+`presets show` also reports the effective system/user prompt origins (config inline, config file, or built-in fallback). Dry-run reports origins after independent CLI field overrides.
 
 **`presets show` displays raw templates**, not resolved prompts. The output will contain placeholders like `{from}`, `{to}`, and `{text}` as literal text, making it suitable for copying into a custom prompt file.
 
@@ -1022,6 +1024,7 @@ UTILITY:
   -v, --verbose             Print provider, model, token usage, and timing to stderr
   -q, --quiet               Suppress warnings (errors still shown)
       --config <FILE>       Config file [default: ~/.config/translate/config.toml]
+                            Loads one file: CLI > TRANSLATE_CONFIG > default; explicit paths must exist.
   -h, --help                Show this help
       --version             Show version
 

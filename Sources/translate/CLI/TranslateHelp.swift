@@ -86,6 +86,7 @@ UTILITY:
   -v, --verbose             Print provider, model, token usage, and timing to stderr
   -q, --quiet               Suppress warnings (errors still shown)
       --config <FILE>       Config file [default: ~/.config/translate/config.toml]
+                            Loads one file: CLI > TRANSLATE_CONFIG > default; explicit paths must exist.
   -h, --help                Show this help
       --version             Show version
 

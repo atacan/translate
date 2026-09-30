@@ -230,6 +230,8 @@ List presets:
 translate presets list
 ```
 
+`presets list` marks built-ins overridden in config. `presets which` reports the configured/text default without inspecting input; catalogs may instead select the implicit `xcode-strings` default. `presets show` and dry-run report each prompt field's origin.
+
 Show preset prompts:
 
 ```bash
@@ -277,7 +279,7 @@ Templates are rendered once: placeholder-like text in source, context, filenames
 
 For providers that use prompts, the user template must contain non-whitespace text, and `{text}` must appear in either the system or user template. Invalid templates fail before a translation request. Unsupported identifier-shaped tokens such as `{target_language}` produce a warning and remain literal; ordinary JSON and CSS braces do not produce warnings.
 
-Each CLI prompt override replaces only its corresponding preset field. Within a preset, inline prompt text takes precedence over its prompt file. A preset that changes only provider, model, or other metadata still uses default prompts. `--no-lang` suppresses the missing-language warning for customized prompts; it does not suppress validation or unknown-token warnings. Promptless providers ignore unused templates.
+Each CLI prompt override replaces only its corresponding preset field. Within a preset, inline prompt text takes precedence over its prompt file. Missing fields in a preset named like a built-in fall back to that built-in; other custom names fall back to the original built-in `general`, even when `[presets.general]` is customized. Relative TOML `system_prompt_file` and `user_prompt_file` paths resolve beside the config file. CLI `@file` paths resolve from the invocation working directory. Absolute and `~/` paths keep their usual meaning. Only selected prompt files are read. A preset that changes only provider, model, or other metadata still uses default prompts. `--no-lang` suppresses the missing-language warning for customized prompts; it does not suppress validation or unknown-token warnings. Promptless providers ignore unused templates.
 
 ## Xcode string catalogs
 
@@ -303,6 +305,8 @@ Override config path:
 
 - CLI: `--config /path/to/config.toml`
 - Environment: `TRANSLATE_CONFIG=/path/to/config.toml`
+
+Exactly one config is loaded: `--config` takes precedence over `TRANSLATE_CONFIG`, then the default path. There is no project discovery or config stacking. A missing implicit default is valid and uses built-in defaults. A missing explicitly selected path fails translation and read-only `config`/`presets` commands. `config path` still prints missing paths; `config set` and `config edit` create the selected file and parent directories. `config unset` on a missing file does nothing. Unknown keys and wrong types in defaults/presets produce warnings naming the key and expected setting, without printing its value.
 
 Inspect config:
 

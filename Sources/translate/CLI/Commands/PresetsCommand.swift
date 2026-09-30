@@ -23,7 +23,8 @@ struct PresetsCommand: ParsableCommand {
                 print("BUILT-IN PRESETS")
                 for preset in grouped.builtIn {
                     let marker = preset.name == active ? "*" : " "
-                    print("  \(preset.name.padding(toLength: 14, withPad: " ", startingAt: 0))\(marker)  \(preset.description ?? "")")
+                    let source = preset.source == .userDefined ? " [overridden in config]" : ""
+                    print("  \(preset.name.padding(toLength: 14, withPad: " ", startingAt: 0))\(marker)  \(preset.description ?? "")\(source)")
                 }
 
                 print("")
@@ -52,6 +53,10 @@ struct PresetsCommand: ParsableCommand {
                 let cwd = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
                 let templates = try PromptRenderer().resolvePresetTemplates(preset: preset, cwd: cwd)
 
+                let origins = PromptOrigins.resolve(preset: preset, config: config)
+                print("System prompt origin: \(origins.system)")
+                print("User prompt origin: \(origins.user)")
+                print("")
                 print("--- SYSTEM PROMPT ---")
                 print(templates.systemPrompt)
                 print("")
@@ -62,6 +67,8 @@ struct PresetsCommand: ParsableCommand {
     }
 
     struct Which: ParsableCommand {
+        static let configuration = CommandConfiguration(abstract: "Print the configured/text default preset (catalogs may default to xcode-strings).")
+
         @Option(name: .long, help: "Config file path.")
         var config: String?
 
@@ -78,13 +85,8 @@ struct PresetsCommand: ParsableCommand {
 }
 
 private func loadConfig(_ path: String?) throws -> ResolvedConfig {
-    let resolvedPath = resolveConfigPath(path)
-    let table = try ConfigStore().load(path: resolvedPath)
-    let resolved = ConfigResolver().resolve(path: resolvedPath, table: table)
-    let terminal = TerminalIO(quiet: false, verbose: false)
-    for warning in ConfigResolver().namedProviderCollisionWarnings(resolved) {
-        terminal.warn(warning.replacingOccurrences(of: "Warning: ", with: ""))
-    }
+    let resolved = try loadSelectedConfig(path)
+    emitConfigWarnings(resolved, terminal: TerminalIO(quiet: false, verbose: false))
     return resolved
 }
 

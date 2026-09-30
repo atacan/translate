@@ -3,6 +3,10 @@ import Foundation
 enum ConfigLocator {
     static let defaultConfig = "~/.config/translate/config.toml"
 
+    static func isExplicitlySelected(cli: String?, env: [String: String]) -> Bool {
+        cli != nil || env["TRANSLATE_CONFIG"] != nil
+    }
+
     static func resolvedConfigPath(cli: String?, env: [String: String], cwd: URL, home: URL) -> URL {
         let raw = cli ?? env["TRANSLATE_CONFIG"] ?? defaultConfig
         return expandToAbsoluteURL(raw, cwd: cwd, homeDirectory: home)

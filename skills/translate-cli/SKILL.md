@@ -15,7 +15,8 @@ Use this skill to help end users run and configure the `translate` CLI.
 - Keep options before positional input(s) when constructing commands (for example, `translate --to de README.md`).
 - Explain provider selection, credentials, model/base URL requirements, and provider-specific constraints.
 - Configure defaults, provider endpoints, network settings, and presets with `translate config` and `config.toml`.
-- Customize prompts with presets, inline templates, `@file` templates, and placeholders.
+- Customize prompts with presets, inline templates, `@file` templates, and placeholders. Explain per-field fallback and config-relative preset files versus cwd-relative CLI files.
+- Inspect config selection and prompt origins, including explicitly missing paths and locally overridden built-ins.
 - Explain output behavior (`stdout`, `--output`, `--in-place`, suffix naming), parallel jobs, dry-run, and validation errors.
 - Streaming output: `--stream` forces on, `--no-stream` forces off, otherwise `defaults.stream` applies.
 
