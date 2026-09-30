@@ -91,6 +91,52 @@ final class CatalogDryRunTests: XCTestCase {
         XCTAssertFalse(output.stderr.contains("not found"))
     }
 
+    func testRetranslateFlagSelectsCompletedTargetsAndAppliesOnlyToCatalogs() throws {
+        let directory = try TestSupport.makeTemporaryDirectory()
+        let catalog = try writeCatalog(in: directory, translated: true)
+        let text = directory.appendingPathComponent("notes.txt")
+        try "Hello".write(to: text, atomically: true, encoding: .utf8)
+        let output = try run(directory: directory, arguments: ["--dry-run", "--retranslate", "--to", "fr", text.path, catalog.path])
+        XCTAssertEqual(output.status, 0, output.stderr)
+        XCTAssertTrue(output.stdout.contains("Mode: text translation"))
+        XCTAssertTrue(output.stdout.contains("Pending segments: 1"))
+        XCTAssertEqual(try String(contentsOf: text, encoding: .utf8), "Hello")
+        for arguments in [["--dry-run", "--retranslate", "--text", "Hello"], ["--dry-run", "--retranslate", text.path]] {
+            let invalid = try run(directory: directory, arguments: arguments)
+            XCTAssertNotEqual(invalid.status, 0)
+            XCTAssertTrue(invalid.stderr.contains("--retranslate requires at least one .xcstrings catalog"))
+        }
+    }
+
+    func testRetranslateExecutionAttemptsCompletedTargetAndPreservesItOnFailure() throws {
+        let directory = try TestSupport.makeTemporaryDirectory()
+        let catalog = try writeCatalog(in: directory, translated: true)
+        // Port zero cannot accept a connection; no external service is contacted.
+        let provider = ["--provider", "openai-compatible", "--model", "mock", "--api-key", "test", "--base-url", "http://127.0.0.1:0", "--to", "fr"]
+        let completed = try run(directory: directory, arguments: provider + [catalog.path])
+        XCTAssertEqual(completed.status, 0, completed.stderr)
+        let forced = try run(directory: directory, arguments: ["--retranslate"] + provider + [catalog.path])
+        XCTAssertNotEqual(forced.status, 0)
+        XCTAssertTrue(forced.stderr.contains("segment(s) failed in catalog translation"))
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(forced.stdout.utf8)) as? [String: Any])
+        let strings = try XCTUnwrap(object["strings"] as? [String: Any])
+        let entry = try XCTUnwrap(strings["greeting"] as? [String: Any])
+        let locales = try XCTUnwrap(entry["localizations"] as? [String: Any])
+        let target = try XCTUnwrap(locales["fr"] as? [String: Any])
+        XCTAssertEqual((target["stringUnit"] as? [String: Any])?["value"] as? String, "Bonjour")
+    }
+
+    func testSourceTargetCLIHasNoPendingRequestsAndRejectsForce() throws {
+        let directory = try TestSupport.makeTemporaryDirectory()
+        let catalog = try writeCatalog(in: directory)
+        let normal = try run(directory: directory, arguments: ["--dry-run", "--to", "EN", catalog.path])
+        XCTAssertEqual(normal.status, 0, normal.stderr)
+        XCTAssertTrue(normal.stdout.contains("Pending segments: 0"))
+        let forced = try run(directory: directory, arguments: ["--dry-run", "--retranslate", "--to", "EN", catalog.path])
+        XCTAssertNotEqual(forced.status, 0)
+        XCTAssertTrue(forced.stderr.contains("cannot target catalog sourceLanguage"))
+    }
+
     private func writeCatalog(in directory: URL, translated: Bool = false) throws -> URL {
         let url = directory.appendingPathComponent("Localizable.xcstrings")
         let target = translated ? ",\"fr\":{\"stringUnit\":{\"state\":\"translated\",\"value\":\"Bonjour\"}}" : ""

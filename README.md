@@ -293,6 +293,15 @@ translate --dry-run --in-place --to fr notes.md Localizable.xcstrings
 
 Catalog `sourceLanguage` determines the source language; conflicting non-auto CLI/config/preset source settings warn. `--format` affects each segment's `{format}` only and cannot change catalog routing. `{filename}` is the basename, `{string_key}` is the entry key, `{comment}` is its developer comment, and `{segment}` identifies `stringUnit`, `stringSet[index]`, or `variation[path]`. `{context}` and `{context_block}` combine CLI context and developer comments with distinct `CLI context:` and `Developer comment:` labels.
 
+Catalog selection includes missing or empty target values and nonempty targets marked `new` or `needs_review` for string units, string sets, plural/device variants, and substitutions. Nonempty completed or unknown states are preserved by default. `--retranslate` selects all eligible target segments, including completed translations; it requires a catalog and applies only to catalogs in mixed batches. Catalog source localizations are preserved: targeting `sourceLanguage` yields no pending work, and forced source retranslation fails.
+
+```bash
+translate --dry-run --retranslate --to fr Localizable.xcstrings
+translate --retranslate --in-place --yes --to fr Localizable.xcstrings
+```
+
+Every translated segment is checked for printf/Xcode placeholder identity, type, argument position, formatting, and multiplicity, including escaped `%%`, star width/precision arguments, and `%#@name@` references. Valid positional reordering is allowed, including implicit source arguments changed to explicit target numbering. Mixing numbered and sequential argument consumption is rejected. Invalid output is reported as a segment failure and retains the original target slot. Best-effort runs write valid segments while returning failure status; partial string sets remain incomplete. Unmodeled catalog metadata is preserved.
+
 Catalog dry-run parses files and previews up to three actual pending segment requests per catalog with source/target metadata, preset selection and prompt origins, and provider/model. It reports zero pending segments and fails for malformed catalogs. Mixed batches show both paths. Dry-run never calls APIs, requests overwrite confirmation, or writes files, including in-place runs without `--yes`.
 
 ## Configuration
@@ -392,6 +401,7 @@ Main translation options:
 - `--user-prompt <text|@file>` user prompt override
 - `--context, -c <text>` extra context
 - `--format <auto|text|markdown|html>` format hint
+- `--retranslate` replace existing catalog target segments (catalogs only in mixed input)
 - `--dry-run` print resolved prompts/provider/model and exit
 - `--quiet, -q` suppress warnings
 - `--verbose, -v` verbose diagnostics

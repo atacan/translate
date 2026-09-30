@@ -175,3 +175,12 @@ translate --provider lmstudio --text --to fr "Hello world"
 translate --provider apple-translate --text --to fr "Hello world"
 translate --provider apple-intelligence --text --to fr "Hello world"
 ```
+
+Preview and replace existing catalog target translations:
+
+```bash
+translate --dry-run --retranslate --to fr Localizable.xcstrings
+translate --retranslate --in-place --yes --to fr Localizable.xcstrings
+```
+
+Empty targets and targets marked `new`/`needs_review` are translated without forcing. Invalid placeholder output keeps the original target segment and returns failure status.

@@ -29,6 +29,12 @@ struct TranslationOrchestrator {
             cwd: cwd
         )
 
+        if options.retranslate {
+            guard case .files(let files, _) = inputMode, files.contains(where: isCatalogFile(_:)) else {
+                throw AppError.invalidArguments("--retranslate requires at least one .xcstrings catalog; it applies only to catalogs in mixed input.")
+            }
+        }
+
         let presetResolver = PresetResolver()
         let onlyCatalogs: Bool
         if case .files(let files, _) = inputMode { onlyCatalogs = files.allSatisfy(isCatalogFile(_:)) }
@@ -287,7 +293,7 @@ struct TranslationOrchestrator {
             var catalogErrors: [TranslationFileResult] = []
             for file in catalogFiles {
                 do {
-                    let plan = try await CatalogPendingPlan.prepare(file: file, targetLanguage: catalogTo, jobs: jobs)
+                    let plan = try await CatalogPendingPlan.prepare(file: file, targetLanguage: catalogTo, jobs: jobs, retranslate: options.retranslate)
                     catalogPlans[file] = plan
                     plan.sourceWarnings(configuredSource: catalogFrom, filename: file.path.lastPathComponent).forEach(terminal.warn)
                     if catalogFormatHint != .auto && !catalogProvider.promptless {

@@ -8,6 +8,7 @@ struct CatalogWorkflow {
         targetLanguage: NormalizedLanguage,
         prompts: CatalogPromptConfiguration? = nil,
         plan: CatalogPendingPlan? = nil,
+        retranslate: Bool = false,
         provider: any TranslationProvider,
         jobs: Int,
         outputMode: OutputMode,
@@ -19,7 +20,7 @@ struct CatalogWorkflow {
         do {
             let pendingPlan: CatalogPendingPlan
             if let plan { pendingPlan = plan }
-            else { pendingPlan = try await CatalogPendingPlan.prepare(file: file, targetLanguage: targetLanguage, jobs: jobs) }
+            else { pendingPlan = try await CatalogPendingPlan.prepare(file: file, targetLanguage: targetLanguage, jobs: jobs, retranslate: retranslate) }
             let resolvedPrompts: CatalogPromptConfiguration
             if let prompts { resolvedPrompts = prompts }
             else {
@@ -34,7 +35,7 @@ struct CatalogWorkflow {
             }
             let translator = CatalogBridge.makeTranslator(provider: provider, prompts: resolvedPrompts, network: network)
             let translation = try await pendingPlan.translate(using: translator, jobs: jobs)
-            let encoded = try translation.catalog.encodePrettyToString()
+            let encoded = try pendingPlan.encodedCatalog(translation)
 
             let destination = try write(
                 text: encoded,
@@ -49,8 +50,10 @@ struct CatalogWorkflow {
                 return TranslationFileResult(file: file, destination: destination, success: true, errorMessage: nil)
             }
 
-            let firstFailureReason = translation.report.failures.first?.reason ?? "unknown failure"
-            let summary = "\(translation.report.failures.count) segment(s) failed in catalog translation. First failure: \(firstFailureReason)"
+            let details = translation.report.failures.map { failure in
+                "'\(failure.stringKey)' (\(CatalogBridge.segmentLabel(failure.segment))): \(failure.reason)"
+            }.joined(separator: "; ")
+            let summary = "\(translation.report.failures.count) segment(s) failed in catalog translation. \(details)"
             return TranslationFileResult(file: file, destination: destination, success: false, errorMessage: summary)
         } catch {
             return TranslationFileResult(file: file, destination: nil, success: false, errorMessage: (error as? AppError)?.message ?? error.localizedDescription)

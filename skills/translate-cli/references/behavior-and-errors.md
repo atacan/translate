@@ -64,6 +64,11 @@
 - Catalog dry-run parses inputs and shows up to three real pending requests per file with source/target, preset selection and prompt origins, and provider/model. It reports zero pending segments and fails for malformed catalogs. Mixed inputs show both routes.
 - Dry-run never calls APIs, writes files, or confirms overwrites, including `--dry-run --in-place` without `--yes`.
 
+- Pending catalog segments include missing/empty target values and `new`/`needs_review` states across units, sets, variants, and substitutions. Completed/unknown nonempty states remain unchanged by default. `--retranslate` forces eligible target segments and applies only to catalogs in mixed input.
+- Printf/Xcode placeholders are validated for identity, argument position, formatting/type, and multiplicity; positional reordering is valid. Invalid results preserve original slots, valid segments are written, and the command returns failure status. Partial string sets remain incomplete and metadata is retained.
+- A catalog target matching `sourceLanguage` (case-insensitive) has zero pending requests. `--retranslate` for that source target fails to preserve source localizations.
+
+
 ## Common errors
 
 - `OPENAI_API_KEY is required for provider 'openai'.`

@@ -81,6 +81,7 @@ FORMAT:
                             No effect for apple-translate or deepl.
 
 UTILITY:
+      --retranslate         Replace existing catalog target segments; catalogs only in mixed input.
       --dry-run             Preview actual requests, metadata, and prompt origins.
                             Parses catalogs, shows pending segments; no API call, write, or confirmation.
   -v, --verbose             Print provider, model, token usage, and timing to stderr

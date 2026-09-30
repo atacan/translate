@@ -259,6 +259,7 @@ Language values are normalized internally. The following are all equivalent: `Fr
 
 | Flag | Short | Type | Default | Description |
 |---|---|---|---|---|
+| `--retranslate` | | flag | false | Replace existing catalog target segments. Requires at least one catalog; applies only to catalogs in mixed input. |
 | `--dry-run` | | flag | false | Print the fully resolved prompts and provider/model that would be used. Does not call any API. |
 | `--verbose` | `-v` | flag | false | Print provider, model, detected language, token usage, elapsed time, and output filename(s) to stderr. |
 | `--quiet` | `-q` | flag | false | Suppress all warnings. Errors are still printed to stderr. Mutually exclusive with `--verbose`. |
@@ -384,6 +385,10 @@ Catalogs use `xcode-strings` implicitly only when no CLI preset, explicit config
 Catalog `sourceLanguage` is authoritative for segment selection, provider requests, and `{from}`. A conflicting non-auto effective CLI/config/preset source setting warns; `--from` cannot change the catalog source. A format hint changes segment `{format}` only and cannot bypass catalog routing; a non-auto hint diagnoses this behavior. `{filename}` is the catalog basename; `{string_key}` is the entry key; `{comment}` is the developer comment; `{segment}` is `stringUnit`, `stringSet[index]`, or `variation[path]`. Metadata is substituted once and remains literal.
 
 Catalog `{context}` combines trimmed CLI context and the developer comment on separate lines, labeled `CLI context:` and `Developer comment:`; `{context_block}` wraps this combined context with the usual prefix. Either label is omitted when its value is absent. Custom templates can also use `{comment}` directly.
+
+Pending selection includes missing/empty target values and nonempty `new`/`needs_review` states across base string units, string sets, plural/device variants, and substitutions. Preserve nonempty completed and unknown states by default. `--retranslate` forces existing target segments and requires at least one catalog; mixed batches apply it only to catalogs. Case-insensitive target matching retains the existing localization key. Source-language targets produce zero pending work; forced source retranslation is an error. Variant-only entries must not synthesize base requests from their keys.
+
+Validate each translated segment before acceptance for printf/Xcode placeholder identity, type/length, argument position, width/precision (including positional stars), and multiplicity, including `%%` and `%#@name@`. Permit positional reordering and implicit-to-explicit argument numbering; reject mixed numbered/sequential argument consumption, including stars. Ordinary percent prose is not a placeholder. Best-effort runs retain failed original target slots and unmodeled metadata, write valid segments, and return failure status. Partial string sets cannot claim `translated` state or copy source values into failed slots.
 
 Dry-run parses every catalog, reports pending segment count (including zero), and previews up to three real pending requests per catalog through the same renderer as execution. It shows source/target metadata, provider/model, preset selection origin, and independent system/user prompt origins. Mixed batches show both text and catalog paths. Malformed inputs fail dry-run after valid input previews. Dry-run never calls a provider, confirms overwrites, or writes files, including `--dry-run --in-place` without `--yes`.
 
@@ -1019,6 +1024,7 @@ FORMAT:
                             No effect for apple-translate or deepl.
 
 UTILITY:
+      --retranslate         Replace existing catalog target segments; catalogs only in mixed input.
       --dry-run             Preview actual requests, metadata, and prompt origins.
                             Parses catalogs, shows pending segments; no API call, write, or confirmation.
   -v, --verbose             Print provider, model, token usage, and timing to stderr

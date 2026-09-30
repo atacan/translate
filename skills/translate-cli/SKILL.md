@@ -18,6 +18,7 @@ Use this skill to help end users run and configure the `translate` CLI.
 - Customize prompts with presets, inline templates, `@file` templates, and placeholders. Explain per-field fallback and config-relative preset files versus cwd-relative CLI files.
 - Inspect config selection and prompt origins, including explicitly missing paths and locally overridden built-ins.
 - Explain output behavior (`stdout`, `--output`, `--in-place`, suffix naming), parallel jobs, dry-run, and validation errors.
+- Explain catalog selection, `--retranslate`, placeholder validation, best-effort failure preservation, and source-language protection.
 - Streaming output: `--stream` forces on, `--no-stream` forces off, otherwise `defaults.stream` applies.
 
 ## Starter commands
