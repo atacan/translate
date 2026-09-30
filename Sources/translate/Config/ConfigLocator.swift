@@ -16,9 +16,8 @@ enum ConfigLocator {
                 .standardizedFileURL
         }
 
-        let url = URL(fileURLWithPath: trimmed)
-        if url.path.hasPrefix("/") {
-            return url.standardizedFileURL
+        if trimmed.hasPrefix("/") {
+            return URL(fileURLWithPath: trimmed).standardizedFileURL
         }
 
         return cwd.appendingPathComponent(trimmed).standardizedFileURL

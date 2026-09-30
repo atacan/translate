@@ -27,6 +27,11 @@ Templates support:
 - `{context_block}`
 - `{filename}`
 - `{format}`
+- `{string_key}`, `{comment}`, `{segment}` (catalog metadata, empty when unavailable)
+
+Substitution scans the original template once. Literal placeholders in inserted source, context, filenames, or metadata stay intact. Double-braced literals such as `{{to}}` remain exactly as written; they are not unescaped.
+
+Providers that use prompts require a non-empty, non-whitespace user template and `{text}` in at least one of the two templates. A `{text}` token in the system template satisfies the source requirement even when the user template has none. Promptless providers do not load or validate unused templates. `presets show` displays raw templates without requiring execution validity.
 
 `{context_block}` becomes empty when context is blank; otherwise it is rendered as:
 
@@ -54,9 +59,14 @@ translate --text --to en \
 
 ## Warning behavior
 
-- If using custom prompts and neither `{from}` nor `{to}` exists, a warning is shown.
+- If resolved prompt content differs from its built-in fallback and neither `{from}` nor `{to}` exists, a warning is shown.
 - Pass `--no-lang` to suppress that warning when languages are intentionally hardcoded.
+- Presets that change only metadata (provider, model, languages, format, description), and overrides identical to default templates, retain default-prompt behavior.
 - `--no-lang` with default prompts warns that it has no effect.
+- Unsupported identifier-shaped tokens (for example `{target_language}`) warn once per token and remain literal. Ordinary JSON/CSS braces, malformed braces, and double-braced literals do not warn.
+- `--no-lang` does not bypass template validation or suppress unknown-token warnings.
+
+CLI overrides take precedence for each prompt field independently. Within a preset, `system_prompt` takes precedence over `system_prompt_file`; `user_prompt` takes precedence over `user_prompt_file`. A field without an override retains its preset or built-in fallback.
 
 ## User-defined presets in TOML
 

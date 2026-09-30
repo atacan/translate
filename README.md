@@ -271,6 +271,13 @@ Available placeholders:
 - `{context_block}`
 - `{filename}`
 - `{format}`
+- `{string_key}`, `{comment}`, `{segment}` (catalog metadata; empty when unavailable)
+
+Templates are rendered once: placeholder-like text in source, context, filenames, or metadata is preserved literally. Context retains the usual leading/trailing whitespace trimming. Double-braced text such as `{{to}}` is preserved as written, including both braces.
+
+For providers that use prompts, the user template must contain non-whitespace text, and `{text}` must appear in either the system or user template. Invalid templates fail before a translation request. Unsupported identifier-shaped tokens such as `{target_language}` produce a warning and remain literal; ordinary JSON and CSS braces do not produce warnings.
+
+Each CLI prompt override replaces only its corresponding preset field. Within a preset, inline prompt text takes precedence over its prompt file. A preset that changes only provider, model, or other metadata still uses default prompts. `--no-lang` suppresses the missing-language warning for customized prompts; it does not suppress validation or unknown-token warnings. Promptless providers ignore unused templates.
 
 ## Configuration
 

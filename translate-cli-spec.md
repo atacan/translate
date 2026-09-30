@@ -270,7 +270,11 @@ Language values are normalized internally. The following are all equivalent: `Fr
 
 ## 5. Prompt Templating System
 
-All prompts — both built-in and user-provided — are **templates**. Before a prompt is sent to a provider, the tool resolves all placeholders by substituting their values.
+All prompts — both built-in and user-provided — are **templates**. Before a prompt is sent to a provider, the tool resolves placeholders in a single pass over the original template. Inserted source, context, filename, and metadata values are never scanned again; literal tokens such as `{to}` inside those values remain intact. Context is still trimmed as described below. Double-braced text such as `{{to}}` is preserved literally, including both braces.
+
+For providers that use prompts, validate the resolved template pair before sending any translation request: the user template must not be empty or whitespace-only, and at least one template must contain a complete `{text}` token. A `{text}` token in the system template satisfies the source requirement even when the user template has none. An empty system template is allowed. Unused templates for promptless providers are neither loaded nor validated. `presets show` continues to show raw templates without execution validation.
+
+Unsupported identifier-shaped placeholders matching `{identifier}` (ASCII letters or underscore followed by letters, digits, or underscores) emit one warning per unique token, in system-then-user appearance order, and remain literal. JSON objects, CSS declarations, malformed braces, and double-braced literals are ordinary template text and do not produce unsupported-placeholder warnings. Malformed or double-braced `{text}` does not satisfy the source requirement. `--no-lang` does not suppress these warnings or bypass validation.
 
 ### 5.1 Available Placeholders
 
@@ -283,6 +287,9 @@ All prompts — both built-in and user-provided — are **templates**. Before a 
 | `{context_block}` | `--context` flag (formatted) | System prompt, User prompt | Non-empty: `\nAdditional context: <value>`. Empty: `""`. Use in default prompts for clean conditional rendering. |
 | `{filename}` | Source file basename | System prompt, User prompt | Empty string `""` when input is not a file |
 | `{format}` | Detected or specified format | System prompt, User prompt | `text`, `markdown`, or `HTML` |
+| `{string_key}` | Catalog string key | System prompt, User prompt | Empty when metadata is unavailable |
+| `{comment}` | Catalog developer comment | System prompt, User prompt | Empty when metadata is unavailable |
+| `{segment}` | Catalog translation segment | System prompt, User prompt | Empty when metadata is unavailable |
 
 **Language normalization:** `{from}` and `{to}` always resolve to full English display names (e.g. `fr` → `French`, `zh-TW` → `Traditional Chinese`).
 
@@ -324,7 +331,7 @@ The file is read at invocation time. Relative paths are resolved from the curren
 
 ### 5.5 Language Placeholder Warning
 
-When a custom prompt is provided (via `--system-prompt` or `--user-prompt`) and **neither `{from}` nor `{to}` appear anywhere in either prompt**, the tool emits a warning to stderr:
+When resolved prompt content differs from its built-in fallback (through CLI overrides or preset inline/file prompts) and **neither `{from}` nor `{to}` appear anywhere in either prompt**, the tool emits a warning to stderr:
 
 ```
 Warning: Your custom prompt does not contain {from} or {to} placeholders.
@@ -332,7 +339,7 @@ Warning: Your custom prompt does not contain {from} or {to} placeholders.
          If you have hardcoded languages in your prompt, pass --no-lang to suppress this warning.
 ```
 
-This warning is suppressed by `--quiet` or `--no-lang`.
+This warning is suppressed by `--quiet` or `--no-lang`. A user preset that changes only provider, model, languages, format, or description is not prompt customization; neither is an override whose content equals the built-in fallback. `--no-lang` with unchanged default prompts warns that it has no effect.
 
 ### 5.6 LLM Output Sanitization
 
@@ -709,6 +716,8 @@ USER-DEFINED PRESETS (in ~/.config/translate/config.toml)
 | Unknown preset name | `"Unknown preset '<name>'. Run translate presets list to see available presets."` |
 | Unknown provider name | `"Unknown provider '<name>'. Run translate --help for valid providers."` |
 | Input file not found | `"Input file '<path>' not found."` |
+| Empty or whitespace-only user template for an LLM provider | `"User prompt must not be empty. Provide a non-empty --user-prompt or preset user_prompt template."` |
+| LLM template pair without `{text}` | `"Prompt templates must contain {text} in the system or user prompt so the source text is sent. Add {text} to --system-prompt, --user-prompt, or the preset templates."` |
 | `@FILE` prompt reference not found | `"Prompt file '<path>' not found."` |
 | Glob pattern matches zero files | `"No files matched the pattern '<pattern>'."` |
 | Input is a binary file (single file mode) | `"'<filename>' appears to be a binary file and cannot be translated."` |
@@ -724,6 +733,7 @@ USER-DEFINED PRESETS (in ~/.config/translate/config.toml)
 
 | Condition | Warning |
 |---|---|
+| Unsupported identifier-shaped template token | `"Warning: Unsupported prompt placeholder {<name>} will be preserved literally. Use a supported placeholder or remove it from the template."` |
 | Custom prompt provided without `{from}` or `{to}` placeholders, and `--no-lang` not set | `"Warning: Your custom prompt does not contain {from} or {to} placeholders. If you have hardcoded languages, pass --no-lang to suppress this warning."` |
 | `--no-lang` used with default prompts (no custom prompt active) | `"Warning: --no-lang has no effect when using default prompts."` |
 | `--system-prompt`, `--user-prompt`, `--context`, `--format`, or `--preset` used with `apple-translate` or `deepl` | `"Warning: --<flag> is ignored when using <provider>. This provider does not support custom prompts."` |
