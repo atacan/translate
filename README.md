@@ -279,6 +279,20 @@ For providers that use prompts, the user template must contain non-whitespace te
 
 Each CLI prompt override replaces only its corresponding preset field. Within a preset, inline prompt text takes precedence over its prompt file. A preset that changes only provider, model, or other metadata still uses default prompts. `--no-lang` suppresses the missing-language warning for customized prompts; it does not suppress validation or unknown-token warnings. Promptless providers ignore unused templates.
 
+## Xcode string catalogs
+
+`.xcstrings` files are translated one segment at a time using the same prompt templates and independent system/user override precedence as text input. Catalogs default to `xcode-strings` unless a CLI preset, explicit config `defaults.preset`, or customized default/general preset selects another preset. Explicit `general` wins. Mixed batches choose defaults and preset provider/model/target settings per input route; default filename suffixes follow each target.
+
+```bash
+translate --to fr Localizable.xcstrings
+translate --preset general --to de --context "Settings screen" Localizable.xcstrings
+translate --dry-run --in-place --to fr notes.md Localizable.xcstrings
+```
+
+Catalog `sourceLanguage` determines the source language; conflicting non-auto CLI/config/preset source settings warn. `--format` affects each segment's `{format}` only and cannot change catalog routing. `{filename}` is the basename, `{string_key}` is the entry key, `{comment}` is its developer comment, and `{segment}` identifies `stringUnit`, `stringSet[index]`, or `variation[path]`. `{context}` and `{context_block}` combine CLI context and developer comments with distinct `CLI context:` and `Developer comment:` labels.
+
+Catalog dry-run parses files and previews up to three actual pending segment requests per catalog with source/target metadata, preset selection and prompt origins, and provider/model. It reports zero pending segments and fails for malformed catalogs. Mixed batches show both paths. Dry-run never calls APIs, requests overwrite confirmation, or writes files, including in-place runs without `--yes`.
+
 ## Configuration
 
 Default config path:

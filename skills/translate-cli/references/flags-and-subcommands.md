@@ -48,7 +48,7 @@ Accepted language forms: language names (`French`), ISO 639-1 (`fr`), and BCP 47
 
 ## Utility and global flags
 
-- `--dry-run`: print resolved provider/model/prompts, no API call.
+- `--dry-run`: preview provider/model/prompts and metadata/origins; parse catalogs and show actual pending segment previews. No API call, write, or overwrite confirmation, including with `--in-place`.
 - `-v, --verbose`: print diagnostics and timing metadata.
 - `-q, --quiet`: suppress warnings.
 - `--config <FILE>`: override config path.

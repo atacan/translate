@@ -289,7 +289,7 @@ Unsupported identifier-shaped placeholders matching `{identifier}` (ASCII letter
 | `{format}` | Detected or specified format | System prompt, User prompt | `text`, `markdown`, or `HTML` |
 | `{string_key}` | Catalog string key | System prompt, User prompt | Empty when metadata is unavailable |
 | `{comment}` | Catalog developer comment | System prompt, User prompt | Empty when metadata is unavailable |
-| `{segment}` | Catalog translation segment | System prompt, User prompt | Empty when metadata is unavailable |
+| `{segment}` | Catalog translation segment | System prompt, User prompt | `stringUnit`, `stringSet[index]`, or `variation[path]`; empty when metadata is unavailable |
 
 **Language normalization:** `{from}` and `{to}` always resolve to full English display names (e.g. `fr` → `French`, `zh-TW` → `Traditional Chinese`).
 
@@ -375,6 +375,18 @@ Target lang:    French
 
 ---
 
+### 5.8 Catalog Segment Prompts and Dry-run
+
+`.xcstrings` inputs always use per-segment catalog translation, never whole-JSON translation. Every actual segment request uses the CLI prompt resolver/renderer. System and user precedence is independent: CLI inline or `@file`, active user preset inline, active user preset file, then the matching built-in template (or built-in `general` for differently named custom presets). Promptless providers skip unused template loading/validation; preset provider/model/language metadata still applies, and warnings identify only the ignored prompt portion.
+
+Catalogs use `xcode-strings` implicitly only when no CLI preset, explicit config `defaults.preset`, or customized config default/general preset selects another preset. Explicit `general` wins. Mixed inputs resolve defaults and metadata separately for the text and catalog routes, including provider/model/target and default output suffixes. Explicit CLI flags override both routes.
+
+Catalog `sourceLanguage` is authoritative for segment selection, provider requests, and `{from}`. A conflicting non-auto effective CLI/config/preset source setting warns; `--from` cannot change the catalog source. A format hint changes segment `{format}` only and cannot bypass catalog routing; a non-auto hint diagnoses this behavior. `{filename}` is the catalog basename; `{string_key}` is the entry key; `{comment}` is the developer comment; `{segment}` is `stringUnit`, `stringSet[index]`, or `variation[path]`. Metadata is substituted once and remains literal.
+
+Catalog `{context}` combines trimmed CLI context and the developer comment on separate lines, labeled `CLI context:` and `Developer comment:`; `{context_block}` wraps this combined context with the usual prefix. Either label is omitted when its value is absent. Custom templates can also use `{comment}` directly.
+
+Dry-run parses every catalog, reports pending segment count (including zero), and previews up to three real pending requests per catalog through the same renderer as execution. It shows source/target metadata, provider/model, preset selection origin, and independent system/user prompt origins. Mixed batches show both text and catalog paths. Malformed inputs fail dry-run after valid input previews. Dry-run never calls a provider, confirms overwrites, or writes files, including `--dry-run --in-place` without `--yes`.
+
 ## 6. Presets
 
 A preset is a **named bundle** that can specify any of: a system prompt template, a user prompt template, a provider, a model, a default `--from`, and a default `--to`. Presets allow users to define reusable translation profiles.
@@ -410,7 +422,7 @@ system_prompt = "Translate {from} to {to}. Be extremely concise."
 
 All fields are optional. Unspecified fields fall back to the `general` built-in defaults. A preset with only `provider` set is valid.
 
-**Shadowing built-ins:** A user-defined preset with the same name as a built-in (e.g. `[presets.general]`) takes precedence over the built-in.
+**Shadowing built-ins:** A user-defined preset with the same name as a built-in (e.g. `[presets.general]`) takes precedence independently for each field, with missing fields falling back to that built-in. Differently named custom presets fall back to built-in `general`.
 
 ### 6.3 Preset Resolution Order
 
@@ -471,7 +483,7 @@ CLI flags override preset values on a per-field basis:
 
 These providers translate directly without any system or user prompt. When they are active:
 
-- `--system-prompt`, `--user-prompt`, `--preset` (prompt portion only), `--context`, and `--format` are silently ignored with a warning to stderr (suppressed by `--quiet`).
+- `--system-prompt`, `--user-prompt`, `--preset` (prompt portion only), `--context`, and `--format` are ignored with a warning to stderr (suppressed by `--quiet`). Preset provider/model/language metadata still applies; unused preset prompt templates are neither loaded nor validated.
 - `--to` is **required**. If not provided and no config default is set: `"Error: --to is required when using <provider>. This provider does not use prompts and cannot infer a target language."`
 - `--from` defaults to `auto`. Both providers natively support auto language detection.
 
@@ -733,10 +745,11 @@ USER-DEFINED PRESETS (in ~/.config/translate/config.toml)
 
 | Condition | Warning |
 |---|---|
+| `--preset` used with a promptless provider | `"Warning: The prompt portion of --preset is ignored when using <provider>; preset provider/model/language settings still apply."` |
 | Unsupported identifier-shaped template token | `"Warning: Unsupported prompt placeholder {<name>} will be preserved literally. Use a supported placeholder or remove it from the template."` |
 | Custom prompt provided without `{from}` or `{to}` placeholders, and `--no-lang` not set | `"Warning: Your custom prompt does not contain {from} or {to} placeholders. If you have hardcoded languages, pass --no-lang to suppress this warning."` |
 | `--no-lang` used with default prompts (no custom prompt active) | `"Warning: --no-lang has no effect when using default prompts."` |
-| `--system-prompt`, `--user-prompt`, `--context`, `--format`, or `--preset` used with `apple-translate` or `deepl` | `"Warning: --<flag> is ignored when using <provider>. This provider does not support custom prompts."` |
+| `--system-prompt`, `--user-prompt`, `--context`, or `--format` used with `apple-translate` or `deepl` | `"Warning: --<flag> is ignored when using <provider>. This provider does not support custom prompts."` |
 | `--base-url` provided without explicit `--provider`, so provider is auto-set | `"Info: --base-url provided; provider set to openai-compatible."` |
 | Named endpoint in config has same name as a built-in provider | `"Warning: Named endpoint '<name>' in config has the same name as a built-in provider and will never be used. Rename the endpoint to avoid this conflict."` (emitted at config-load time) |
 | `--jobs` used with non-file input (inline text or stdin) | `"Warning: --jobs has no effect for non-file input."` |
@@ -940,7 +953,7 @@ EXAMPLES:
   translate --provider lm-studio --to fr document.md
   cat notes.txt | translate --to de
   translate --to fr --dry-run document.md
-  translate --preset xcode-strings --to ja document.md
+  translate --to ja Localizable.xcstrings
 
 INPUT:
       --text                Force positional argument to be treated as literal text,
@@ -964,6 +977,7 @@ OUTPUT:
 
 LANGUAGES:
   -f, --from <LANG>         Source language or "auto" [default: auto]
+                            Catalog sourceLanguage is authoritative; conflicting settings warn.
   -t, --to <LANG>           Target language [default: en]
                             Accepts: full names ("French"), ISO 639-1 ("fr"), BCP 47 ("zh-TW")
                             Note: "auto" is not valid for --to
@@ -979,16 +993,18 @@ PROVIDER:
       --api-key <KEY>       API key [overrides env var; prefer env vars for security]
 
 PROMPTS:
-      --preset <name>       Named prompt preset [default: general]
+      --preset <name>       Named prompt preset [default: general; catalogs: xcode-strings]
+                            Explicit CLI/config defaults or a customized default preset win.
                             Run: translate presets list
       --system-prompt <TEMPLATE|@FILE>
                             Override system prompt. Use @path/to/file for file input.
                             Placeholders: {from}, {to}, {text}, {context}, {context_block},
-                                          {filename}, {format}
+                                          {filename}, {format}, {string_key}, {comment}, {segment}
       --user-prompt <TEMPLATE|@FILE>
                             Override user prompt. Same placeholders as above.
   -c, --context <TEXT>      Additional context. Available as {context} (raw) and
                             {context_block} (formatted with prefix) in prompts.
+                            Catalog segments combine CLI context and developer comment.
       --no-lang             Suppress warning when {from}/{to} are absent from a custom prompt
 
 FORMAT:
@@ -997,10 +1013,12 @@ FORMAT:
                               .md, .markdown, .mdx -> markdown
                               .html, .htm          -> html
                               all others, stdin    -> text
+                            Catalogs always use segment translation; affects {format} only.
                             No effect for apple-translate or deepl.
 
 UTILITY:
-      --dry-run             Print resolved prompts and provider/model. No API call.
+      --dry-run             Preview actual requests, metadata, and prompt origins.
+                            Parses catalogs, shows pending segments; no API call, write, or confirmation.
   -v, --verbose             Print provider, model, token usage, and timing to stderr
   -q, --quiet               Suppress warnings (errors still shown)
       --config <FILE>       Config file [default: ~/.config/translate/config.toml]
@@ -1021,7 +1039,6 @@ ENVIRONMENT VARIABLES:
   DEEPL_API_KEY             API key for DeepL
   TRANSLATE_CONFIG          Path to config file
   EDITOR                    Editor for `translate config edit`
-
 ```
 
 ---
@@ -1048,7 +1065,7 @@ This section contains implementation guidance. It does not affect the user-facin
 
 **Apple provider version checks:** Check the OS version at startup when an Apple provider is selected. Fail fast with a clear version error before attempting to invoke any Apple APIs, rather than relying on the API call itself to fail with an opaque system error.
 
-**Inline vs. file prompts in presets:** Both `system_prompt` (inline string) and `system_prompt_file` (file path) are valid in a preset config entry. If both are present, inline takes precedence. Apply the same rule to `user_prompt` vs. `user_prompt_file`. Validate at startup that any referenced prompt files actually exist, and error early rather than failing mid-translation.
+**Inline vs. file prompts in presets:** Both `system_prompt` (inline string) and `system_prompt_file` (file path) are valid in a preset config entry. If both are present, inline takes precedence. Apply the same rule to `user_prompt` vs. `user_prompt_file`. Validate prompt files selected for an active prompt field before translation. Overridden and promptless-provider templates are not loaded.
 
 **Named endpoint collision detection:** The collision warning for named endpoints (Section 7.4) should be emitted at config-load time on every invocation, not just when `--provider` happens to match. This way users discover the misconfiguration immediately even if they are not currently using that provider.
 

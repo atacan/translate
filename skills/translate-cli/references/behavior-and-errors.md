@@ -57,7 +57,12 @@
 
 - `.xcstrings` files are processed by catalog workflow with best-effort mode.
 - Catalog segment failures are summarized and reported as file failures.
-- `--dry-run` for catalog files prints catalog-specific dry-run details.
+- Catalogs share the CLI prompt resolver and renderer, independently for system/user fields. CLI inline and `@file` overrides and TOML inline/prompt-file fields reach providers per segment.
+- The implicit preset is `xcode-strings` only when no CLI preset, explicit config default, or customized default/general preset selects another preset. Explicit `general` wins. Mixed batches choose defaults and provider/model/target metadata per route.
+- Catalog `sourceLanguage` is authoritative; conflicting non-auto source settings warn. Format hints affect segment `{format}` only; catalogs always use segment translation.
+- `{context}` and `{context_block}` combine CLI context and developer comment with distinct labels. `{filename}`, `{string_key}`, `{comment}`, and `{segment}` expose catalog metadata; segment labels are `stringUnit`, `stringSet[index]`, or `variation[path]`.
+- Catalog dry-run parses inputs and shows up to three real pending requests per file with source/target, preset selection and prompt origins, and provider/model. It reports zero pending segments and fails for malformed catalogs. Mixed inputs show both routes.
+- Dry-run never calls APIs, writes files, or confirms overwrites, including `--dry-run --in-place` without `--yes`.
 
 ## Common errors
 

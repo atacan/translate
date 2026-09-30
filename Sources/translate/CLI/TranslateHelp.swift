@@ -17,7 +17,7 @@ EXAMPLES:
   translate --provider lm-studio --to fr document.md
   cat notes.txt | translate --to de
   translate --to fr --dry-run document.md
-  translate --preset xcode-strings --to ja document.md
+  translate --to ja Localizable.xcstrings
 
 INPUT:
       --text                Force positional argument to be treated as literal text,
@@ -41,6 +41,7 @@ OUTPUT:
 
 LANGUAGES:
   -f, --from <LANG>         Source language or "auto" [default: auto]
+                            Catalog sourceLanguage is authoritative; conflicting settings warn.
   -t, --to <LANG>           Target language [default: en]
                             Accepts: full names ("French"), ISO 639-1 ("fr"), BCP 47 ("zh-TW")
                             Note: "auto" is not valid for --to
@@ -56,16 +57,18 @@ PROVIDER:
       --api-key <KEY>       API key [overrides env var; prefer env vars for security]
 
 PROMPTS:
-      --preset <name>       Named prompt preset [default: general]
+      --preset <name>       Named prompt preset [default: general; catalogs: xcode-strings]
+                            Explicit CLI/config defaults or a customized default preset win.
                             Run: translate presets list
       --system-prompt <TEMPLATE|@FILE>
                             Override system prompt. Use @path/to/file for file input.
                             Placeholders: {from}, {to}, {text}, {context}, {context_block},
-                                          {filename}, {format}
+                                          {filename}, {format}, {string_key}, {comment}, {segment}
       --user-prompt <TEMPLATE|@FILE>
                             Override user prompt. Same placeholders as above.
   -c, --context <TEXT>      Additional context. Available as {context} (raw) and
                             {context_block} (formatted with prefix) in prompts.
+                            Catalog segments combine CLI context and developer comment.
       --no-lang             Suppress warning when {from}/{to} are absent from a custom prompt
 
 FORMAT:
@@ -74,10 +77,12 @@ FORMAT:
                               .md, .markdown, .mdx -> markdown
                               .html, .htm          -> html
                               all others, stdin    -> text
+                            Catalogs always use segment translation; affects {format} only.
                             No effect for apple-translate or deepl.
 
 UTILITY:
-      --dry-run             Print resolved prompts and provider/model. No API call.
+      --dry-run             Preview actual requests, metadata, and prompt origins.
+                            Parses catalogs, shows pending segments; no API call, write, or confirmation.
   -v, --verbose             Print provider, model, token usage, and timing to stderr
   -q, --quiet               Suppress warnings (errors still shown)
       --config <FILE>       Config file [default: ~/.config/translate/config.toml]

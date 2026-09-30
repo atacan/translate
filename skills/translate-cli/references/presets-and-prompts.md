@@ -92,3 +92,9 @@ Supported keys inside `[presets.<name>]`:
 - `from`
 - `to`
 - `format`
+
+## Catalog resolution
+
+Catalog requests use these templates per segment. `xcode-strings` is implicit only when no CLI preset, explicit config `defaults.preset`, or customized default/general preset selects another preset; explicit `general` wins. Mixed batches resolve defaults and provider/model/target metadata per route. CLI overrides apply independently to the matching prompt field for both routes. User fields fall back to the matching built-in preset, or built-in `general` for custom names.
+
+Catalog `{context}` combines trimmed CLI context and developer comment on separate lines labeled `CLI context:` and `Developer comment:`. `{comment}` remains directly available. `{filename}` is the catalog basename, `{string_key}` is its entry key, and `{segment}` is `stringUnit`, `stringSet[index]`, or `variation[path]`. Catalog `sourceLanguage` determines `{from}` and provider source metadata; conflicting source settings warn. A format hint affects `{format}` only.

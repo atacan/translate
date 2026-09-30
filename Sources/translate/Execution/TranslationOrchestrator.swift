@@ -24,16 +24,22 @@ struct TranslationOrchestrator {
             terminal.warn(warning.replacingOccurrences(of: "Warning: ", with: ""))
         }
 
+        let inputMode = try await InputResolver().resolve(
+            positional: options.input,
+            forceText: options.text,
+            terminal: terminal,
+            cwd: cwd
+        )
+
         let presetResolver = PresetResolver()
-        let activePresetName = presetResolver.activePresetName(cliPreset: options.preset, config: config)
+        let onlyCatalogs: Bool
+        if case .files(let files, _) = inputMode { onlyCatalogs = files.allSatisfy(isCatalogFile(_:)) }
+        else { onlyCatalogs = false }
+        let activePresetName = presetResolver.activePresetName(cliPreset: options.preset, config: config, isCatalog: onlyCatalogs)
         let preset = try presetResolver.resolvePreset(named: activePresetName, config: config)
 
-        let providerName: String
         if options.baseURL != nil, options.provider == nil {
-            providerName = ProviderID.openAICompatible.rawValue
             terminal.info("--base-url provided; provider set to openai-compatible.")
-        } else {
-            providerName = options.provider ?? preset.provider ?? config.defaultsProvider
         }
 
         let fromRaw = options.from ?? preset.from ?? config.defaultsFrom
@@ -45,13 +51,6 @@ struct TranslationOrchestrator {
         let jobs = max(1, options.jobs ?? config.defaultsJobs)
         let assumeYes = options.yes || config.defaultsYes
         let streamEnabled = options.noStream ? false : (options.stream ? true : config.defaultsStream)
-
-        let inputMode = try await InputResolver().resolve(
-            positional: options.input,
-            forceText: options.text,
-            terminal: terminal,
-            cwd: cwd
-        )
 
         if options.jobs != nil {
             switch inputMode {
@@ -78,10 +77,12 @@ struct TranslationOrchestrator {
         }
 
         let promptRenderer = PromptRenderer()
-        let resolveExecutionContext = { (requireCredentials: Bool) throws -> (ProviderSelection, ResolvedPromptSet) in
+        let resolveExecutionContext = { (resolvedPreset: PresetDefinition, requireCredentials: Bool) throws -> (ProviderSelection, ResolvedPromptSet) in
             let providerSelection = try ProviderFactory(config: config, env: env).make(
-                providerName: providerName,
-                modelOverride: options.model ?? preset.model,
+                providerName: options.baseURL != nil && options.provider == nil
+                    ? ProviderID.openAICompatible.rawValue
+                    : options.provider ?? resolvedPreset.provider ?? config.defaultsProvider,
+                modelOverride: options.model ?? resolvedPreset.model,
                 baseURLOverride: options.baseURL,
                 apiKeyOverride: options.apiKey,
                 explicitProvider: options.provider != nil,
@@ -93,11 +94,19 @@ struct TranslationOrchestrator {
                 basePrompts = ResolvedPromptSet(systemPrompt: "", userPrompt: "", customPromptActive: false)
                 let ignoredFlags = ignoredPromptFlags(options: options)
                 for flag in ignoredFlags {
-                    terminal.warn("--\(flag) is ignored when using \(providerSelection.name). This provider does not support custom prompts.")
+                    if flag == "preset" {
+                        terminal.warn("The prompt portion of --preset is ignored when using \(providerSelection.name); preset provider/model/language settings still apply.")
+                    } else {
+                        terminal.warn("--\(flag) is ignored when using \(providerSelection.name). This provider does not support custom prompts.")
+                    }
+                }
+                if let userPreset = config.presets[resolvedPreset.name],
+                   userPreset.systemPrompt != nil || userPreset.userPrompt != nil || userPreset.systemPromptFile != nil || userPreset.userPromptFile != nil {
+                    terminal.warn("Prompt templates in config preset '\(resolvedPreset.name)' are ignored when using \(providerSelection.name); preset metadata still applies.")
                 }
             } else {
                 let resolved = try promptRenderer.resolvePrompts(
-                    preset: preset,
+                    preset: resolvedPreset,
                     systemPromptOverride: options.systemPrompt,
                     userPromptOverride: options.userPrompt,
                     cwd: cwd,
@@ -114,7 +123,7 @@ struct TranslationOrchestrator {
 
         switch inputMode {
         case .inlineText(let inlineText):
-            let (providerSelection, basePrompts) = try resolveExecutionContext(!options.dryRun)
+            let (providerSelection, basePrompts) = try resolveExecutionContext(preset, !options.dryRun)
             let format = FormatDetector.detect(formatHint: formatHint, inputFile: nil)
             let renderedPrompts = promptRenderer.render(
                 basePrompts,
@@ -175,7 +184,7 @@ struct TranslationOrchestrator {
             }
 
         case .stdin(let stdinText):
-            let (providerSelection, basePrompts) = try resolveExecutionContext(!options.dryRun)
+            let (providerSelection, basePrompts) = try resolveExecutionContext(preset, !options.dryRun)
             let format = FormatDetector.detect(formatHint: formatHint, inputFile: nil)
             let renderedPrompts = promptRenderer.render(
                 basePrompts,
@@ -258,9 +267,45 @@ struct TranslationOrchestrator {
                 return
             }
 
-            let (providerSelection, basePrompts) = try resolveExecutionContext(!options.dryRun)
+            let catalogPresetName = presetResolver.activePresetName(cliPreset: options.preset, config: config, isCatalog: true)
+            // Resolve catalog metadata separately: a customized implicit xcode preset may carry its own
+            // provider/model/languages. Never apply the text preset's metadata to that route.
+            let catalogPreset = catalogFiles.isEmpty ? preset : try presetResolver.resolvePreset(named: catalogPresetName, config: config)
+            let executionPreset = validInspections.isEmpty ? catalogPreset : preset
+            let (providerSelection, basePrompts) = try resolveExecutionContext(executionPreset, !options.dryRun)
+            let catalogFrom = try LanguageNormalizer.normalizeFrom(options.from ?? catalogPreset.from ?? config.defaultsFrom)
+            let catalogTo = try LanguageNormalizer.normalizeTo(options.to ?? catalogPreset.to ?? config.defaultsTo)
+            let catalogFormatHint = options.format ?? (FormatHint(rawValue: catalogPreset.format ?? "") ?? config.defaultsFormat)
+            let (catalogProvider, catalogTemplates) = catalogFiles.isEmpty || catalogPresetName == executionPreset.name
+                ? (providerSelection, basePrompts)
+                : try resolveExecutionContext(catalogPreset, !options.dryRun)
+            let catalogOrigins = PromptOrigins.resolve(preset: catalogPreset, config: config, options: options)
+            let textOrigins = PromptOrigins.resolve(preset: preset, config: config, options: options)
+            var catalogPlans: [ResolvedInputFile: CatalogPendingPlan] = [:]
+            var catalogErrors: [TranslationFileResult] = []
+            for file in catalogFiles {
+                do {
+                    let plan = try await CatalogPendingPlan.prepare(file: file, targetLanguage: catalogTo, jobs: jobs)
+                    catalogPlans[file] = plan
+                    plan.sourceWarnings(configuredSource: catalogFrom, filename: file.path.lastPathComponent).forEach(terminal.warn)
+                    if catalogFormatHint != .auto && !catalogProvider.promptless {
+                        terminal.warn("\(file.path.lastPathComponent): format '\(catalogFormatHint.rawValue)' affects segment {format} only; .xcstrings files always use catalog translation.")
+                    }
+                } catch {
+                    let message = (error as? AppError)?.message ?? "\(file.path.path): \(error.localizedDescription)"
+                    terminal.error(message)
+                    catalogErrors.append(TranslationFileResult(file: file, destination: nil, success: false, errorMessage: message))
+                }
+            }
+            func catalogPrompts(for file: ResolvedInputFile) -> CatalogPromptConfiguration {
+                CatalogPromptConfiguration(
+                    templates: catalogTemplates, context: options.context ?? "",
+                    filename: file.path.lastPathComponent,
+                    format: FormatDetector.detect(formatHint: catalogFormatHint, inputFile: file.path)
+                )
+            }
 
-            let destinationMap: [ResolvedInputFile: URL] = {
+            var destinationMap: [ResolvedInputFile: URL] = {
                 switch outputPlan.mode {
                 case .stdout:
                     return [:]
@@ -272,51 +317,50 @@ struct TranslationOrchestrator {
                 }
             }()
 
-            if case .perFile(let targets, let inPlace) = outputPlan.mode, inPlace {
-                let prompter = ConfirmationPrompter(terminal: terminal, assumeYes: assumeYes)
-                try prompter.confirm("This will overwrite \(targets.count) file(s). Proceed? [y/N]")
+            if case .perFile(_, let inPlace) = outputPlan.mode, !inPlace, options.suffix == nil,
+               catalogTo.providerCode != to.providerCode {
+                // Default suffixes follow the target of each input's preset.
+                for file in catalogFiles {
+                    let plan = try OutputPlanner().plan(OutputPlanningRequest(
+                        inputMode: .files([file], cameFromGlob: true), toLanguage: catalogTo,
+                        outputPath: nil, inPlace: false, suffix: nil, cwd: cwd
+                    ))
+                    if case .perFile(let targets, _) = plan.mode { destinationMap[file] = targets.first?.destination }
+                }
             }
 
             if options.dryRun {
-                if let first = validInspections.first, let text = first.content {
-                    let format = FormatDetector.detect(formatHint: formatHint, inputFile: first.file.path)
-                    let renderedPrompts = promptRenderer.render(
-                        basePrompts,
-                        with: PromptRenderContext(
-                            text: text,
-                            from: from,
-                            to: to,
-                            context: options.context ?? "",
-                            filename: first.file.path.lastPathComponent,
-                            format: format
-                        )
-                    )
-                    terminal.writeStdout(
-                        DryRunPrinter.render(
-                            provider: providerSelection.name,
-                            model: providerSelection.model,
-                            from: from,
-                            to: to,
-                            prompts: renderedPrompts,
-                            inputText: text
-                        )
-                    )
-                    return
+                for inspection in validInspections {
+                    guard let text = inspection.content else { continue }
+                    let renderedPrompts = promptRenderer.render(basePrompts, with: PromptRenderContext(
+                        text: text, from: from, to: to, context: options.context ?? "",
+                        filename: inspection.file.path.lastPathComponent,
+                        format: FormatDetector.detect(formatHint: formatHint, inputFile: inspection.file.path)
+                    ))
+                    terminal.writeStdout("File: \(inspection.file.path.path)\nMode: text translation\nPreset: \(activePresetName)\nSystem prompt origin: \(providerSelection.promptless ? "unused (promptless provider)" : textOrigins.system)\nUser prompt origin: \(providerSelection.promptless ? "unused (promptless provider)" : textOrigins.user)")
+                    terminal.writeStdout(DryRunPrinter.render(
+                        provider: providerSelection.name, model: providerSelection.model, from: from,
+                        to: to, prompts: renderedPrompts, inputText: text
+                    ))
                 }
-
-                if !catalogFiles.isEmpty {
-                    terminal.writeStdout(
-                        CatalogWorkflow().dryRunDescription(
-                            providerName: providerSelection.name,
-                            model: providerSelection.model,
-                            targetLanguage: to,
-                            jobs: jobs,
-                            files: catalogFiles
-                        )
-                    )
-                    return
+                for file in catalogFiles {
+                    guard let plan = catalogPlans[file] else { continue }
+                    terminal.writeStdout(CatalogWorkflow().dryRunDescription(
+                        file: file, plan: plan, providerName: catalogProvider.name, model: catalogProvider.model,
+                        presetName: catalogPresetName,
+                        presetOrigin: PromptOrigins.presetSelection(cliPreset: options.preset, config: config, isCatalog: true),
+                        targetOrigin: options.to != nil ? "CLI --to" : (catalogPreset.to != nil ? "preset \(catalogPresetName).to" : "config/built-in defaults.to"),
+                        origins: catalogOrigins, prompts: catalogPrompts(for: file),
+                        promptless: catalogProvider.promptless, jobs: jobs, network: config.network
+                    ))
                 }
+                if !catalogErrors.isEmpty || !immediateErrors.isEmpty { throw AppError.runtime("One or more files failed.") }
                 return
+            }
+
+            if case .perFile(let targets, let inPlace) = outputPlan.mode, inPlace {
+                let prompter = ConfirmationPrompter(terminal: terminal, assumeYes: assumeYes)
+                try prompter.confirm("This will overwrite \(targets.count) file(s). Proceed? [y/N]")
             }
 
             let writer = OutputWriter(
@@ -324,15 +368,18 @@ struct TranslationOrchestrator {
                 prompter: ConfirmationPrompter(terminal: terminal, assumeYes: assumeYes),
                 skipOverwriteConfirmation: outputPlan.mode.isInPlacePerFile
             )
-            var results = immediateErrors
+            var results = immediateErrors + catalogErrors
 
             if !catalogFiles.isEmpty {
                 let catalogWorkflow = CatalogWorkflow()
                 for file in catalogFiles {
+                    guard let plan = catalogPlans[file] else { continue }
                     let result = await catalogWorkflow.translateCatalogFile(
                         file: file,
-                        targetLanguage: to,
-                        provider: providerSelection.provider,
+                        targetLanguage: catalogTo,
+                        prompts: catalogPrompts(for: file),
+                        plan: plan,
+                        provider: catalogProvider.provider,
                         jobs: jobs,
                         outputMode: outputPlan.mode,
                         destinationMap: destinationMap,
