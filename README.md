@@ -268,16 +268,49 @@ translate --text --to en \
   "Merhaba dunya"
 ```
 
-Available placeholders:
+Placeholders are replaced with values for the current input or catalog segment:
 
-- `{from}`
-- `{to}`
-- `{text}`
-- `{context}`
-- `{context_block}`
-- `{filename}`
-- `{format}`
-- `{string_key}`, `{comment}`, `{segment}` (catalog metadata; empty when unavailable)
+| Placeholder | Meaning and possible values |
+| --- | --- |
+| `{from}` | Source language's English display name, such as `English` or `Traditional Chinese`. With `--from auto`, this becomes the literal phrase `the source language`. Catalogs use their `sourceLanguage`. |
+| `{to}` | Target language's English display name, such as `French`. Language settings accept recognized names (`French`), ISO 639-1 codes (`fr`), or BCP 47 tags (`zh-TW`); `auto` is allowed only for the source. The prompt receives the display name. |
+| `{text}` | The source text to translate, including its existing whitespace and line breaks. For a catalog, this is one selected segment's text. |
+| `{context}` | Free-form text supplied with `--context`, trimmed of leading/trailing whitespace. Empty when no context is supplied. For catalogs, it combines CLI context and the entry's developer comment on separate lines labeled `CLI context:` and `Developer comment:`; absent parts are omitted. |
+| `{context_block}` | Empty when `{context}` is empty. Otherwise, a leading newline followed by `Additional context: ` and the same context text. Use it to append optional context to an instruction without leaving a label when context is absent. |
+| `{filename}` | Input file's basename, including its extension, such as `notes.md` or `Localizable.xcstrings`. Empty for inline text and stdin. |
+| `{format}` | Resolved source-content hint: exactly `text`, `markdown`, or `HTML` (capitalized). Resolution is explained below. |
+| `{string_key}` | Catalog entry's key, for example `welcome.title`. Empty for non-catalog input. |
+| `{comment}` | Catalog entry's developer comment as written. Empty when the comment is missing or input is not a catalog. |
+| `{segment}` | Catalog segment label: `stringUnit`, `stringSet[index]` (zero-based index, for example `stringSet[0]`), or `variation[path]` (for example `variation[variations.plural.one]`). Empty for non-catalog input. |
+
+`--format` accepts exactly `auto`, `text`, `markdown`, or `html`. The same values are valid for `format` in TOML defaults/presets. Explicit `text` and `markdown` render unchanged; `html` renders as `HTML`. With `auto`, the file extension determines the value:
+
+| Input | `{format}` value |
+| --- | --- |
+| `.md`, `.markdown`, `.mdx` files | `markdown` |
+| `.html`, `.htm` files | `HTML` |
+| Other extensions, including `.xcstrings`, or inline text/stdin | `text` |
+
+Extensions are matched case-insensitively. `auto` is a selection setting; the rendered placeholder always contains one of the three resolved values. The hint describes the content to the LLM; catalog files continue to use per-segment catalog translation regardless of the hint.
+
+For example, with `--to fr --context "Settings screen"`, this user template:
+
+```text
+Translate to {to}.{context_block}
+
+{text}
+```
+
+renders for the source text `Save changes` as:
+
+```text
+Translate to French.
+Additional context: Settings screen
+
+Save changes
+```
+
+Without `--context`, the `Additional context:` line disappears. If you want your own label or layout, use `{context}` instead, for example `Screen: {context}`; that label remains even when context is empty. See the [catalog context walkthrough](examples/21-catalog-overrides-and-context/README.md) for both placeholders with developer comments.
 
 Templates are rendered once: placeholder-like text in source, context, filenames, or metadata is preserved literally. Context retains the usual leading/trailing whitespace trimming. Double-braced text such as `{{to}}` is preserved as written, including both braces.
 
