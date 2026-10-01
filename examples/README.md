@@ -1,6 +1,6 @@
 # Runnable prompt examples
 
-These 31 independent walkthroughs target this source tree and its built executable. Older released binaries may behave differently; the branch still reports version 0.3.0. Every command explicitly selects one local config with `--config`; run it after changing into that example directory. No local config discovery or config merging is involved.
+These 31 independent walkthroughs target this source tree and its built executable. The demonstrated prompt and catalog behavior is available starting with version 0.4.0. Every command explicitly selects one local config with `--config`; run it after changing into that example directory. No local config discovery or config merging is involved.
 
 From the repository root, build the branch and put its executable on PATH:
 
