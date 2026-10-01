@@ -1,5 +1,7 @@
 # Quickstart
 
+For complete local configs, commands, and expected prompts, see the [runnable examples collection](https://github.com/atacan/translate/tree/main/examples). These walkthroughs use explicit `--config` selection and `--dry-run`, without requiring provider credentials.
+
 ## Provider credentials (if required)
 
 Set API keys before running network providers:

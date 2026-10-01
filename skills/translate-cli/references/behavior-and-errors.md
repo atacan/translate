@@ -87,3 +87,15 @@
 - `1`: runtime error
 - `2`: invalid arguments
 - `3`: aborted
+
+## Worked examples
+
+For exact commands, diagnostics, and exit statuses, choose the relevant walkthrough:
+
+- [Invalid prompt pairs and language warnings](https://github.com/atacan/translate/tree/main/examples/25-invalid-prompts).
+- [Missing configs, unknown keys, and wrong types](https://github.com/atacan/translate/tree/main/examples/26-config-diagnostics).
+- [Unused or overridden missing prompt files](https://github.com/atacan/translate/tree/main/examples/27-unused-prompt-files).
+- [Pending catalog segment selection](https://github.com/atacan/translate/tree/main/examples/28-catalog-pending-selection).
+- [Completed catalog targets and retranslation](https://github.com/atacan/translate/tree/main/examples/29-catalog-retranslation).
+- [Catalog source language and format routing](https://github.com/atacan/translate/tree/main/examples/30-catalog-source-and-format).
+- [Ignored prompts with a promptless provider](https://github.com/atacan/translate/tree/main/examples/31-promptless-provider).

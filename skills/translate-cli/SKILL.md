@@ -32,6 +32,10 @@ translate config set defaults.provider anthropic
 
 Note: prefer option-before-input ordering in all examples and generated commands.
 
+## Worked examples
+
+For runnable demonstrations with local `--config` files, exact rendered prompts, and precedence explanations, consult the [examples collection](https://github.com/atacan/translate/tree/main/examples). When a user needs a concrete demonstration or more detail than these references, select the relevant walkthrough and explain its command and expected output. The topic references below link directly to matching examples. Each walkthrough uses `--dry-run` to preview behavior without API calls or credentials; response validation requires actual execution.
+
 ## References
 
 - Quick examples: `references/quickstart.md`

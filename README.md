@@ -39,6 +39,8 @@ The optional `translate-cli` skill provides usage guidance for coding agents. In
 npx skills add atacan/translate --skill translate-cli
 ```
 
+For more detail alongside the skill, explore the [runnable examples](examples/README.md): local configs, exact rendered prompts, and explanations of which settings take precedence.
+
 ## Quick Start
 
 These examples assume you already configured a provider (see Provider Setup below).

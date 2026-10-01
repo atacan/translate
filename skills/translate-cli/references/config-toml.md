@@ -20,6 +20,8 @@ Exactly one config is loaded, with no project discovery or stacking. Missing imp
 
 Relative preset `*_prompt_file` paths resolve beside this config file; CLI `@file` paths resolve from invocation cwd. Absolute and `~/` paths retain their meaning. Config inspection retains the original TOML paths.
 
+Worked examples: [config-relative prompt files](https://github.com/atacan/translate/tree/main/examples/06-config-relative-paths), [selecting one config without merging](https://github.com/atacan/translate/tree/main/examples/16-explicit-config-selection), and [CLI files overriding config files](https://github.com/atacan/translate/tree/main/examples/14-cli-file-over-config-file). Each includes the local files, command, and exact rendered prompts.
+
 Inspect current path:
 
 ```bash

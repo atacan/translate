@@ -1048,6 +1048,8 @@ ENVIRONMENT VARIABLES:
   DEEPL_API_KEY             API key for DeepL
   TRANSLATE_CONFIG          Path to config file
   EDITOR                    Editor for `translate config edit`
+
+Worked examples with configs and expected prompts: https://github.com/atacan/translate/tree/main/examples
 ```
 
 ---
