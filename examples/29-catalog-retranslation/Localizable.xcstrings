@@ -1,0 +1,77 @@
+{
+  "sourceLanguage": "en",
+  "strings": {
+    "entry": {
+      "comment": "Count and greeting UI.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hello %@"
+          },
+          "variations": {
+            "device": {
+              "iphone": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Phone %@"
+                }
+              }
+            }
+          },
+          "substitutions": {
+            "count": {
+              "argNum": 1,
+              "formatSpecifier": "lld",
+              "variations": {
+                "plural": {
+                  "other": {
+                    "stringUnit": {
+                      "state": "translated",
+                      "value": "Many %lld"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bonjour %@"
+          },
+          "variations": {
+            "device": {
+              "iphone": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "T\u00e9l\u00e9phone %@"
+                }
+              }
+            }
+          },
+          "substitutions": {
+            "count": {
+              "argNum": 1,
+              "formatSpecifier": "lld",
+              "variations": {
+                "plural": {
+                  "other": {
+                    "stringUnit": {
+                      "state": "translated",
+                      "value": "Plusieurs %lld"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "metadata": "keep"
+        }
+      },
+      "metadata": "keep"
+    }
+  },
+  "version": "1.0"
+}

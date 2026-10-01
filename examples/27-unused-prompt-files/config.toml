@@ -1,0 +1,8 @@
+[presets.demo]
+system_prompt = "CONFIG SYSTEM: Translate {from} to {to}."
+system_prompt_file = "missing-demo-system.txt"
+user_prompt_file = "missing-demo-user.txt"
+
+[presets.unused]
+system_prompt_file = "missing-unused-system.txt"
+user_prompt_file = "missing-unused-user.txt"

@@ -1,0 +1,2 @@
+[presets.markdown]
+system_prompt = "CONFIG SYSTEM: Translate {from} to {to}."

@@ -1,0 +1,6 @@
+[defaults]
+preset = "demo"
+
+[presets.demo]
+system_prompt = "CONFIG SYSTEM: Translate {from} to {to}."
+user_prompt = "CONFIG USER: {text}{context_block}"

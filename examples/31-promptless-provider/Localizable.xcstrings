@@ -1,0 +1,17 @@
+{
+  "sourceLanguage": "en",
+  "strings": {
+    "greeting": {
+      "comment": "Greeting on the welcome screen.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hello %@"
+          }
+        }
+      }
+    }
+  },
+  "version": "1.0"
+}

@@ -63,6 +63,8 @@ Preview resolved prompts and settings without sending a request:
 translate --provider ollama --text --to en --dry-run "Merhaba dunya"
 ```
 
+Explore [31 runnable prompt and config walkthroughs](examples/README.md), each with a local `--config`, dry-run commands, and complete expected messages. They cover text, Xcode catalogs, prompt precedence, file paths, diagnostics, and promptless providers without API calls or credentials.
+
 ## Provider Setup
 
 Defaults:
