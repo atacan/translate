@@ -1,0 +1,3 @@
+[presets.general]
+system_prompt = "NEIGHBOR SYSTEM: {from} to {to}."
+user_prompt = "NEIGHBOR USER: {text}"

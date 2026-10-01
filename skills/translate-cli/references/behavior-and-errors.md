@@ -57,7 +57,17 @@
 
 - `.xcstrings` files are processed by catalog workflow with best-effort mode.
 - Catalog segment failures are summarized and reported as file failures.
-- `--dry-run` for catalog files prints catalog-specific dry-run details.
+- Catalogs share the CLI prompt resolver and renderer, independently for system/user fields. CLI inline and `@file` overrides and TOML inline/prompt-file fields reach providers per segment.
+- The implicit preset is `xcode-strings` only when no CLI preset, explicit config default, or customized default/general preset selects another preset. Explicit `general` wins. Mixed batches choose defaults and provider/model/target metadata per route.
+- Catalog `sourceLanguage` is authoritative; conflicting non-auto source settings warn. Format hints affect segment `{format}` only; catalogs always use segment translation.
+- `{context}` and `{context_block}` combine CLI context and developer comment with distinct labels. `{filename}`, `{string_key}`, `{comment}`, and `{segment}` expose catalog metadata; segment labels are `stringUnit`, `stringSet[index]`, or `variation[path]`.
+- Catalog dry-run parses inputs and shows up to three real pending requests per file with source/target, preset selection and prompt origins, and provider/model. It reports zero pending segments and fails for malformed catalogs. Mixed inputs show both routes.
+- Dry-run never calls APIs, writes files, or confirms overwrites, including `--dry-run --in-place` without `--yes`.
+
+- Pending catalog segments include missing/empty target values and `new`/`needs_review` states across units, sets, variants, and substitutions. Completed/unknown nonempty states remain unchanged by default. `--retranslate` forces eligible target segments and applies only to catalogs in mixed input.
+- Printf/Xcode placeholders are validated for identity, argument position, formatting/type, and multiplicity; positional reordering is valid. Invalid results preserve original slots, valid segments are written, and the command returns failure status. Partial string sets remain incomplete and metadata is retained.
+- A catalog target matching `sourceLanguage` (case-insensitive) has zero pending requests. `--retranslate` for that source target fails to preserve source localizations.
+
 
 ## Common errors
 
@@ -77,3 +87,15 @@
 - `1`: runtime error
 - `2`: invalid arguments
 - `3`: aborted
+
+## Worked examples
+
+For exact commands, diagnostics, and exit statuses, choose the relevant walkthrough:
+
+- [Invalid prompt pairs and language warnings](https://github.com/atacan/translate/tree/main/examples/25-invalid-prompts).
+- [Missing configs, unknown keys, and wrong types](https://github.com/atacan/translate/tree/main/examples/26-config-diagnostics).
+- [Unused or overridden missing prompt files](https://github.com/atacan/translate/tree/main/examples/27-unused-prompt-files).
+- [Pending catalog segment selection](https://github.com/atacan/translate/tree/main/examples/28-catalog-pending-selection).
+- [Completed catalog targets and retranslation](https://github.com/atacan/translate/tree/main/examples/29-catalog-retranslation).
+- [Catalog source language and format routing](https://github.com/atacan/translate/tree/main/examples/30-catalog-source-and-format).
+- [Ignored prompts with a promptless provider](https://github.com/atacan/translate/tree/main/examples/31-promptless-provider).

@@ -2,8 +2,11 @@ import Foundation
 import TOMLKit
 
 struct ConfigStore {
-    func load(path: URL) throws -> TOMLTable {
+    func load(path: URL, requireExists: Bool = false) throws -> TOMLTable {
         guard FileManager.default.fileExists(atPath: path.path) else {
+            if requireExists {
+                throw AppError.runtime("Config file '\(path.path)' not found. Check --config or TRANSLATE_CONFIG, or create it with translate config set/edit.")
+            }
             return TOMLTable()
         }
 

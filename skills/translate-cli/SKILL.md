@@ -15,8 +15,10 @@ Use this skill to help end users run and configure the `translate` CLI.
 - Keep options before positional input(s) when constructing commands (for example, `translate --to de README.md`).
 - Explain provider selection, credentials, model/base URL requirements, and provider-specific constraints.
 - Configure defaults, provider endpoints, network settings, and presets with `translate config` and `config.toml`.
-- Customize prompts with presets, inline templates, `@file` templates, and placeholders.
+- Customize prompts with presets, inline templates, `@file` templates, and placeholders. Explain per-field fallback and config-relative preset files versus cwd-relative CLI files.
+- Inspect config selection and prompt origins, including explicitly missing paths and locally overridden built-ins.
 - Explain output behavior (`stdout`, `--output`, `--in-place`, suffix naming), parallel jobs, dry-run, and validation errors.
+- Explain catalog selection, `--retranslate`, placeholder validation, best-effort failure preservation, and source-language protection.
 - Streaming output: `--stream` forces on, `--no-stream` forces off, otherwise `defaults.stream` applies.
 
 ## Starter commands
@@ -29,6 +31,10 @@ translate config set defaults.provider anthropic
 ```
 
 Note: prefer option-before-input ordering in all examples and generated commands.
+
+## Worked examples
+
+For runnable demonstrations with local `--config` files, exact rendered prompts, and precedence explanations, consult the [examples collection](https://github.com/atacan/translate/tree/main/examples). When a user needs a concrete demonstration or more detail than these references, select the relevant walkthrough and explain its command and expected output. The topic references below link directly to matching examples. Each walkthrough uses `--dry-run` to preview behavior without API calls or credentials; response validation requires actual execution.
 
 ## References
 

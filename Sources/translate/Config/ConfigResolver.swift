@@ -23,7 +23,7 @@ struct ConfigResolver {
 
         let providerEntries = parseProviderEntries(table: table)
         let namedOpenAICompatible = parseNamedOpenAICompatible(table: table)
-        let presets = parseUserPresets(table: table)
+        let presets = parseUserPresets(table: table, configPath: path)
 
         return ResolvedConfig(
             path: path,
@@ -41,6 +41,10 @@ struct ConfigResolver {
             namedOpenAICompatible: namedOpenAICompatible,
             presets: presets
         )
+    }
+
+    func warnings(_ config: ResolvedConfig) -> [String] {
+        ConfigDiagnostics.warnings(table: config.table) + namedProviderCollisionWarnings(config)
     }
 
     func namedProviderCollisionWarnings(_ config: ResolvedConfig) -> [String] {
@@ -127,7 +131,7 @@ struct ConfigResolver {
         return output
     }
 
-    private func parseUserPresets(table: TOMLTable) -> [String: PresetDefinition] {
+    private func parseUserPresets(table: TOMLTable, configPath: URL) -> [String: PresetDefinition] {
         guard let presetsTable = table["presets"]?.table else {
             return [:]
         }
@@ -138,11 +142,11 @@ struct ConfigResolver {
             let preset = PresetDefinition(
                 name: key,
                 source: .userDefined,
-                description: nil,
+                description: presetTable["description"]?.string,
                 systemPrompt: presetTable["system_prompt"]?.string,
-                systemPromptFile: presetTable["system_prompt_file"]?.string,
+                systemPromptFile: presetTable["system_prompt_file"]?.string.map { presetFilePath($0, configPath: configPath) },
                 userPrompt: presetTable["user_prompt"]?.string,
-                userPromptFile: presetTable["user_prompt_file"]?.string,
+                userPromptFile: presetTable["user_prompt_file"]?.string.map { presetFilePath($0, configPath: configPath) },
                 provider: presetTable["provider"]?.string,
                 model: presetTable["model"]?.string,
                 from: presetTable["from"]?.string,
@@ -152,6 +156,11 @@ struct ConfigResolver {
             output[key] = preset
         }
         return output
+    }
+
+    private func presetFilePath(_ raw: String, configPath: URL) -> String {
+        ConfigLocator.expandToAbsoluteURL(raw, cwd: configPath.deletingLastPathComponent(),
+                                          homeDirectory: FileManager.default.homeDirectoryForCurrentUser).path
     }
 
     private func value(in table: TOMLTable, at path: [String]) -> TOMLValueConvertible? {

@@ -16,6 +16,12 @@ Config path precedence (highest to lowest):
 2. Environment variable: `TRANSLATE_CONFIG=/path/to/config.toml`
 3. Default: `~/.config/translate/config.toml`
 
+Exactly one config is loaded, with no project discovery or stacking. Missing implicit defaults use built-ins; an explicitly selected missing path fails translation and read-only config/preset inspection. `config path` can print a missing path. `config set`/`config edit` create selected files and parents; unset on a missing file does nothing. Unknown keys and wrong types in defaults/presets warn with actionable key names, without printing values.
+
+Relative preset `*_prompt_file` paths resolve beside this config file; CLI `@file` paths resolve from invocation cwd. Absolute and `~/` paths retain their meaning. Config inspection retains the original TOML paths.
+
+Worked examples: [config-relative prompt files](https://github.com/atacan/translate/tree/main/examples/06-config-relative-paths), [selecting one config without merging](https://github.com/atacan/translate/tree/main/examples/16-explicit-config-selection), and [CLI files overriding config files](https://github.com/atacan/translate/tree/main/examples/14-cli-file-over-config-file). Each includes the local files, command, and exact rendered prompts.
+
 Inspect current path:
 
 ```bash
@@ -78,6 +84,7 @@ model = "llama3.1"
 api_key = ""
 
 [presets.markdown-custom]
+description = "Custom markdown style"
 system_prompt = "..."
 system_prompt_file = "prompts/system.txt"
 user_prompt = "..."

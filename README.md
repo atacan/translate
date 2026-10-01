@@ -39,6 +39,8 @@ The optional `translate-cli` skill provides usage guidance for coding agents. In
 npx skills add atacan/translate --skill translate-cli
 ```
 
+For more detail alongside the skill, explore the [runnable examples](examples/README.md): local configs, exact rendered prompts, and explanations of which settings take precedence.
+
 ## Quick Start
 
 These examples assume you already configured a provider (see Provider Setup below).
@@ -62,6 +64,8 @@ Preview resolved prompts and settings without sending a request:
 ```bash
 translate --provider ollama --text --to en --dry-run "Merhaba dunya"
 ```
+
+Explore [31 runnable prompt and config walkthroughs](examples/README.md), each with a local `--config`, dry-run commands, and complete expected messages. They cover text, Xcode catalogs, prompt precedence, file paths, diagnostics, and promptless providers without API calls or credentials.
 
 ## Provider Setup
 
@@ -230,6 +234,8 @@ List presets:
 translate presets list
 ```
 
+`presets list` marks built-ins overridden in config. `presets which` reports the configured/text default without inspecting input; catalogs may instead select the implicit `xcode-strings` default. `presets show` and dry-run report each prompt field's origin.
+
 Show preset prompts:
 
 ```bash
@@ -262,15 +268,78 @@ translate --text --to en \
   "Merhaba dunya"
 ```
 
-Available placeholders:
+Placeholders are replaced with values for the current input or catalog segment:
 
-- `{from}`
-- `{to}`
-- `{text}`
-- `{context}`
-- `{context_block}`
-- `{filename}`
-- `{format}`
+| Placeholder | Meaning and possible values |
+| --- | --- |
+| `{from}` | Source language's English display name, such as `English` or `Traditional Chinese`. With `--from auto`, this becomes the literal phrase `the source language`. Catalogs use their `sourceLanguage`. |
+| `{to}` | Target language's English display name, such as `French`. Language settings accept recognized names (`French`), ISO 639-1 codes (`fr`), or BCP 47 tags (`zh-TW`); `auto` is allowed only for the source. The prompt receives the display name. |
+| `{text}` | The source text to translate, including its existing whitespace and line breaks. For a catalog, this is one selected segment's text. |
+| `{context}` | Free-form text supplied with `--context`, trimmed of leading/trailing whitespace. Empty when no context is supplied. For catalogs, it combines CLI context and the entry's developer comment on separate lines labeled `CLI context:` and `Developer comment:`; absent parts are omitted. |
+| `{context_block}` | Empty when `{context}` is empty. Otherwise, a leading newline followed by `Additional context: ` and the same context text. Use it to append optional context to an instruction without leaving a label when context is absent. |
+| `{filename}` | Input file's basename, including its extension, such as `notes.md` or `Localizable.xcstrings`. Empty for inline text and stdin. |
+| `{format}` | Resolved source-content hint: exactly `text`, `markdown`, or `HTML` (capitalized). Resolution is explained below. |
+| `{string_key}` | Catalog entry's key, for example `welcome.title`. Empty for non-catalog input. |
+| `{comment}` | Catalog entry's developer comment as written. Empty when the comment is missing or input is not a catalog. |
+| `{segment}` | Catalog segment label: `stringUnit`, `stringSet[index]` (zero-based index, for example `stringSet[0]`), or `variation[path]` (for example `variation[variations.plural.one]`). Empty for non-catalog input. |
+
+`--format` accepts exactly `auto`, `text`, `markdown`, or `html`. The same values are valid for `format` in TOML defaults/presets. Explicit `text` and `markdown` render unchanged; `html` renders as `HTML`. With `auto`, the file extension determines the value:
+
+| Input | `{format}` value |
+| --- | --- |
+| `.md`, `.markdown`, `.mdx` files | `markdown` |
+| `.html`, `.htm` files | `HTML` |
+| Other extensions, including `.xcstrings`, or inline text/stdin | `text` |
+
+Extensions are matched case-insensitively. `auto` is a selection setting; the rendered placeholder always contains one of the three resolved values. The hint describes the content to the LLM; catalog files continue to use per-segment catalog translation regardless of the hint.
+
+For example, with `--to fr --context "Settings screen"`, this user template:
+
+```text
+Translate to {to}.{context_block}
+
+{text}
+```
+
+renders for the source text `Save changes` as:
+
+```text
+Translate to French.
+Additional context: Settings screen
+
+Save changes
+```
+
+Without `--context`, the `Additional context:` line disappears. If you want your own label or layout, use `{context}` instead, for example `Screen: {context}`; that label remains even when context is empty. See the [catalog context walkthrough](examples/21-catalog-overrides-and-context/README.md) for both placeholders with developer comments.
+
+Templates are rendered once: placeholder-like text in source, context, filenames, or metadata is preserved literally. Context retains the usual leading/trailing whitespace trimming. Double-braced text such as `{{to}}` is preserved as written, including both braces.
+
+For providers that use prompts, the user template must contain non-whitespace text, and `{text}` must appear in either the system or user template. Invalid templates fail before a translation request. Unsupported identifier-shaped tokens such as `{target_language}` produce a warning and remain literal; ordinary JSON and CSS braces do not produce warnings.
+
+Each CLI prompt override replaces only its corresponding preset field. Within a preset, inline prompt text takes precedence over its prompt file. Missing fields in a preset named like a built-in fall back to that built-in; other custom names fall back to the original built-in `general`, even when `[presets.general]` is customized. Relative TOML `system_prompt_file` and `user_prompt_file` paths resolve beside the config file. CLI `@file` paths resolve from the invocation working directory. Absolute and `~/` paths keep their usual meaning. Only selected prompt files are read. A preset that changes only provider, model, or other metadata still uses default prompts. `--no-lang` suppresses the missing-language warning for customized prompts; it does not suppress validation or unknown-token warnings. Promptless providers ignore unused templates.
+
+## Xcode string catalogs
+
+`.xcstrings` files are translated one segment at a time using the same prompt templates and independent system/user override precedence as text input. Catalogs default to `xcode-strings` unless a CLI preset, explicit config `defaults.preset`, or customized default/general preset selects another preset. Explicit `general` wins. Mixed batches choose defaults and preset provider/model/target settings per input route; default filename suffixes follow each target.
+
+```bash
+translate --to fr Localizable.xcstrings
+translate --preset general --to de --context "Settings screen" Localizable.xcstrings
+translate --dry-run --in-place --to fr notes.md Localizable.xcstrings
+```
+
+Catalog `sourceLanguage` determines the source language; conflicting non-auto CLI/config/preset source settings warn. `--format` affects each segment's `{format}` only and cannot change catalog routing. `{filename}` is the basename, `{string_key}` is the entry key, `{comment}` is its developer comment, and `{segment}` identifies `stringUnit`, `stringSet[index]`, or `variation[path]`. `{context}` and `{context_block}` combine CLI context and developer comments with distinct `CLI context:` and `Developer comment:` labels.
+
+Catalog selection includes missing or empty target values and nonempty targets marked `new` or `needs_review` for string units, string sets, plural/device variants, and substitutions. Nonempty completed or unknown states are preserved by default. `--retranslate` selects all eligible target segments, including completed translations; it requires a catalog and applies only to catalogs in mixed batches. Catalog source localizations are preserved: targeting `sourceLanguage` yields no pending work, and forced source retranslation fails.
+
+```bash
+translate --dry-run --retranslate --to fr Localizable.xcstrings
+translate --retranslate --in-place --yes --to fr Localizable.xcstrings
+```
+
+Every translated segment is checked for printf/Xcode placeholder identity, type, argument position, formatting, and multiplicity, including escaped `%%`, star width/precision arguments, and `%#@name@` references. Valid positional reordering is allowed, including implicit source arguments changed to explicit target numbering. Mixing numbered and sequential argument consumption is rejected. Invalid output is reported as a segment failure and retains the original target slot. Best-effort runs write valid segments while returning failure status; partial string sets remain incomplete. Unmodeled catalog metadata is preserved.
+
+Catalog dry-run parses files and previews up to three actual pending segment requests per catalog with source/target metadata, preset selection and prompt origins, and provider/model. It reports zero pending segments and fails for malformed catalogs. Mixed batches show both paths. Dry-run never calls APIs, requests overwrite confirmation, or writes files, including in-place runs without `--yes`.
 
 ## Configuration
 
@@ -282,6 +351,8 @@ Override config path:
 
 - CLI: `--config /path/to/config.toml`
 - Environment: `TRANSLATE_CONFIG=/path/to/config.toml`
+
+Exactly one config is loaded: `--config` takes precedence over `TRANSLATE_CONFIG`, then the default path. There is no project discovery or config stacking. A missing implicit default is valid and uses built-in defaults. A missing explicitly selected path fails translation and read-only `config`/`presets` commands. `config path` still prints missing paths; `config set` and `config edit` create the selected file and parent directories. `config unset` on a missing file does nothing. Unknown keys and wrong types in defaults/presets produce warnings naming the key and expected setting, without printing its value.
 
 Inspect config:
 
@@ -367,6 +438,7 @@ Main translation options:
 - `--user-prompt <text|@file>` user prompt override
 - `--context, -c <text>` extra context
 - `--format <auto|text|markdown|html>` format hint
+- `--retranslate` replace existing catalog target segments (catalogs only in mixed input)
 - `--dry-run` print resolved prompts/provider/model and exit
 - `--quiet, -q` suppress warnings
 - `--verbose, -v` verbose diagnostics

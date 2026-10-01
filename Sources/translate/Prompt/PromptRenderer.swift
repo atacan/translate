@@ -7,6 +7,40 @@ struct PromptRenderContext {
     let context: String
     let filename: String
     let format: ResolvedFormat
+    let stringKey: String
+    let comment: String
+    let segment: String
+
+    init(
+        text: String,
+        from: NormalizedLanguage,
+        to: NormalizedLanguage,
+        context: String,
+        filename: String,
+        format: ResolvedFormat,
+        stringKey: String = "",
+        comment: String = "",
+        segment: String = ""
+    ) {
+        self.text = text
+        self.from = from
+        self.to = to
+        self.context = context
+        self.filename = filename
+        self.format = format
+        self.stringKey = stringKey
+        self.comment = comment
+        self.segment = segment
+    }
+}
+
+// Recognition, validation, and rendering share this list of supported tokens.
+private enum PromptPlaceholder: String, CaseIterable {
+    case from, to, text, context
+    case contextBlock = "context_block"
+    case filename, format
+    case stringKey = "string_key"
+    case comment, segment
 }
 
 struct PromptRenderer {
@@ -56,17 +90,35 @@ struct PromptRenderer {
             promptLabel: "user"
         )
 
-        let customPromptActive = systemPromptOverride != nil || userPromptOverride != nil ||
-            preset.systemPromptFile != nil || preset.userPromptFile != nil || preset.source == .userDefined
+        guard !userTemplate.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            throw AppError.invalidArguments("User prompt must not be empty. Provide a non-empty --user-prompt or preset user_prompt template.")
+        }
+
+        let systemTokens = tokens(in: systemTemplate)
+        let userTokens = tokens(in: userTemplate)
+        let tokenNames = (systemTokens + userTokens).map(\.name)
+        guard tokenNames.contains(PromptPlaceholder.text.rawValue) else {
+            throw AppError.invalidArguments("Prompt templates must contain {text} in the system or user prompt so the source text is sent. Add {text} to --system-prompt, --user-prompt, or the preset templates.")
+        }
+
+        let builtIns = BuiltInPresetStore.all()
+        let fallback = builtIns[preset.name] ?? builtIns[BuiltInDefaults.preset]
+        let customPromptActive = systemTemplate != (fallback?.systemPrompt ?? "") ||
+            userTemplate != (fallback?.userPrompt ?? "")
 
         var warnings: [String] = []
+        var warnedTokens: Set<String> = []
+        for name in tokenNames where PromptPlaceholder(rawValue: name) == nil {
+            if warnedTokens.insert(name).inserted {
+                warnings.append("Warning: Unsupported prompt placeholder {\(name)} will be preserved literally. Use a supported placeholder or remove it from the template.")
+            }
+        }
         if noLang && !customPromptActive {
             warnings.append("Warning: --no-lang has no effect when using default prompts.")
         }
 
         if customPromptActive && !noLang {
-            let promptBody = "\(systemTemplate)\n\(userTemplate)"
-            if !promptBody.contains("{from}") && !promptBody.contains("{to}") {
+            if !tokenNames.contains(PromptPlaceholder.from.rawValue) && !tokenNames.contains(PromptPlaceholder.to.rawValue) {
                 warnings.append("Warning: Your custom prompt does not contain {from} or {to} placeholders. If you have hardcoded languages, pass --no-lang to suppress this warning.")
             }
         }
@@ -123,24 +175,53 @@ struct PromptRenderer {
         }
     }
 
-    private func placeholders(for context: PromptRenderContext) -> [String: String] {
+    private func placeholders(for context: PromptRenderContext) -> [PromptPlaceholder: String] {
         let trimmedContext = context.context.trimmingCharacters(in: .whitespacesAndNewlines)
         return [
-            "{from}": context.from.isAuto ? BuiltInDefaults.sourceLanguagePlaceholder : context.from.displayName,
-            "{to}": context.to.displayName,
-            "{text}": context.text,
-            "{context}": trimmedContext,
-            "{context_block}": trimmedContext.isEmpty ? "" : "\nAdditional context: \(trimmedContext)",
-            "{filename}": context.filename,
-            "{format}": context.format.promptValue,
+            .from: context.from.isAuto ? BuiltInDefaults.sourceLanguagePlaceholder : context.from.displayName,
+            .to: context.to.displayName,
+            .text: context.text,
+            .context: trimmedContext,
+            .contextBlock: trimmedContext.isEmpty ? "" : "\nAdditional context: \(trimmedContext)",
+            .filename: context.filename,
+            .format: context.format.promptValue,
+            .stringKey: context.stringKey,
+            .comment: context.comment,
+            .segment: context.segment,
         ]
     }
 
-    private func substitute(_ template: String, placeholders: [String: String]) -> String {
-        var output = template
-        for (placeholder, value) in placeholders {
-            output = output.replacingOccurrences(of: placeholder, with: value)
+    private struct TemplateToken {
+        let range: Range<String.Index>
+        let name: String
+    }
+
+    private func tokens(in template: String) -> [TemplateToken] {
+        // Only complete, identifier-shaped braces are tokens. JSON objects and
+        // CSS declarations remain ordinary text, as do double-braced literals.
+        let regex = Self.tokenPattern
+        return regex.matches(in: template, range: NSRange(template.startIndex..., in: template)).compactMap { match in
+            guard let range = Range(match.range, in: template),
+                  let nameRange = Range(match.range(at: 1), in: template) else { return nil }
+            return TemplateToken(range: range, name: String(template[nameRange]))
         }
+    }
+
+    private static let tokenPattern = try! NSRegularExpression(pattern: #"(?<!\{)\{([A-Za-z_][A-Za-z0-9_]*)\}(?!\})"#)
+
+    private func substitute(_ template: String, placeholders: [PromptPlaceholder: String]) -> String {
+        var output = ""
+        var cursor = template.startIndex
+        for token in tokens(in: template) {
+            output += template[cursor..<token.range.lowerBound]
+            if let placeholder = PromptPlaceholder(rawValue: token.name), let value = placeholders[placeholder] {
+                output += value
+            } else {
+                output += template[token.range]
+            }
+            cursor = token.range.upperBound
+        }
+        output += template[cursor...]
         return output
     }
 }

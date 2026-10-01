@@ -1,0 +1,1 @@
+Keep {to} and {text} literal; JSON {"color": "blue"}; CSS body { color: blue; }; {{text}}.

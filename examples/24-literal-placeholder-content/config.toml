@@ -1,0 +1,3 @@
+[presets.demo]
+system_prompt = "Translate {from} to {to}. JSON {\"ok\": true}; CSS body { color: blue; }; {{to}}; {mystery}."
+user_prompt = "{text}\nContext: {context}\nUnsupported: {mystery}; double: {{text}}."

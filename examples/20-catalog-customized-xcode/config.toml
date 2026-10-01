@@ -1,0 +1,3 @@
+[presets.xcode-strings]
+system_prompt_file = "system.txt"
+user_prompt_file = "user.txt"

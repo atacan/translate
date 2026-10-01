@@ -1,0 +1,5 @@
+[presets.demo]
+system_prompt = "CONFIG SYSTEM: Translate {from} to {to}."
+
+[presets.general]
+user_prompt = "GENERAL CUSTOM USER SHOULD NOT APPEAR: {text}"

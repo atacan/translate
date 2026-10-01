@@ -1,8 +1,14 @@
 import Foundation
 
 struct PresetResolver {
-    func activePresetName(cliPreset: String?, config: ResolvedConfig) -> String {
-        cliPreset ?? config.defaultsPreset
+    func activePresetName(cliPreset: String?, config: ResolvedConfig, isCatalog: Bool = false) -> String {
+        if let cliPreset { return cliPreset }
+        if isCatalog,
+           config.table["defaults"]?["preset"]?.string == nil,
+           config.presets[config.defaultsPreset] == nil {
+            return "xcode-strings"
+        }
+        return config.defaultsPreset
     }
 
     func resolvePreset(named name: String, config: ResolvedConfig) throws -> PresetDefinition {

@@ -1,0 +1,3 @@
+[presets.general]
+system_prompt = "ALPHA SYSTEM: {from} to {to}."
+user_prompt = "ALPHA USER: {text}"

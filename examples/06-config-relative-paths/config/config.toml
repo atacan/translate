@@ -1,0 +1,3 @@
+[presets.demo]
+system_prompt_file = "prompts/system.txt"
+user_prompt_file = "prompts/user.txt"

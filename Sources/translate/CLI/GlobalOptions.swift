@@ -76,6 +76,9 @@ struct TranslateOptions: ParsableArguments {
     @Option(name: .long, help: "Input format hint.")
     var format: FormatHint?
 
-    @Flag(name: .long, help: "Print resolved prompts and provider/model without calling APIs.")
+    @Flag(name: .long, help: "Retranslate existing catalog target segments; applies only to catalogs in mixed input.")
+    var retranslate = false
+
+    @Flag(name: .long, help: "Preview actual text/catalog requests and metadata without APIs, writes, or confirmations.")
     var dryRun = false
 }

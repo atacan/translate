@@ -1,0 +1,9 @@
+[presets.demo]
+system_prompt = "CONFIG SYSTEM: Translate {from} to {to}."
+user_promt = "DO NOT ECHO THIS VALUE"
+
+[presets.general]
+system_prompt = 42
+
+[defaults]
+stream = "DO NOT ECHO THIS VALUE"

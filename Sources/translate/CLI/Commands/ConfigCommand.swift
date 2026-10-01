@@ -16,10 +16,8 @@ struct ConfigCommand: ParsableCommand {
 
         mutating func run() throws {
             try runWithAppErrorHandling {
-                let path = resolveConfigPath(config)
-                let table = try ConfigStore().load(path: path)
-                let resolved = ConfigResolver().resolve(path: path, table: table)
-                emitNamedProviderCollisionWarnings(config: resolved)
+                let resolved = try loadSelectedConfig(config)
+                emitConfigurationWarnings(config: resolved)
                 print(ConfigResolver().effectiveConfigTable(resolved).convert(to: .toml))
             }
         }
@@ -43,10 +41,9 @@ struct ConfigCommand: ParsableCommand {
 
         mutating func run() throws {
             try runWithAppErrorHandling {
-                let path = resolveConfigPath(config)
-                let table = try ConfigStore().load(path: path)
-                let resolved = ConfigResolver().resolve(path: path, table: table)
-                emitNamedProviderCollisionWarnings(config: resolved)
+                let resolved = try loadSelectedConfig(config)
+                let table = resolved.table
+                emitConfigurationWarnings(config: resolved)
                 guard let value = ConfigKeyPath.get(table: table, key: key) else {
                     throw AppError.runtime("Key '\(key)' not found.")
                 }
@@ -67,9 +64,8 @@ struct ConfigCommand: ParsableCommand {
                 let path = resolveConfigPath(config)
                 let store = ConfigStore()
                 let table = try store.load(path: path)
-                let resolved = ConfigResolver().resolve(path: path, table: table)
-                emitNamedProviderCollisionWarnings(config: resolved)
                 ConfigKeyPath.set(table: table, key: key, value: ConfigKeyPath.parseScalar(value))
+                emitConfigurationWarnings(config: ConfigResolver().resolve(path: path, table: table))
                 try store.save(table: table, path: path)
             }
         }
@@ -84,10 +80,11 @@ struct ConfigCommand: ParsableCommand {
         mutating func run() throws {
             try runWithAppErrorHandling {
                 let path = resolveConfigPath(config)
+                guard FileManager.default.fileExists(atPath: path.path) else { return }
                 let store = ConfigStore()
                 let table = try store.load(path: path)
                 let resolved = ConfigResolver().resolve(path: path, table: table)
-                emitNamedProviderCollisionWarnings(config: resolved)
+                emitConfigurationWarnings(config: resolved)
                 _ = ConfigKeyPath.unset(table: table, key: key)
                 try store.save(table: table, path: path)
             }
@@ -104,7 +101,7 @@ struct ConfigCommand: ParsableCommand {
                 let store = ConfigStore()
                 let table = try store.load(path: path)
                 let resolved = ConfigResolver().resolve(path: path, table: table)
-                emitNamedProviderCollisionWarnings(config: resolved)
+                emitConfigurationWarnings(config: resolved)
                 try store.save(table: table, path: path)
 
                 let editor = ConfigEditor.resolvedEditor(environment: ProcessInfo.processInfo.environment)
@@ -119,11 +116,8 @@ struct ConfigCommand: ParsableCommand {
     }
 }
 
-private func emitNamedProviderCollisionWarnings(config: ResolvedConfig) {
-    let terminal = TerminalIO(quiet: false, verbose: false)
-    for warning in ConfigResolver().namedProviderCollisionWarnings(config) {
-        terminal.warn(warning.replacingOccurrences(of: "Warning: ", with: ""))
-    }
+private func emitConfigurationWarnings(config: ResolvedConfig) {
+    emitConfigWarnings(config, terminal: TerminalIO(quiet: false, verbose: false))
 }
 
 private func runWithAppErrorHandling(_ body: () throws -> Void) throws {

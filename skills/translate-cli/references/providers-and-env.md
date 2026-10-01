@@ -59,7 +59,7 @@ For `deepl` and `apple-translate`, prompt controls are ignored:
 - `--system-prompt`
 - `--user-prompt`
 - `--context`
-- `--preset`
+- `--preset` (prompt portion only; provider/model/language metadata still applies)
 - `--format`
 
 ## Environment variables
