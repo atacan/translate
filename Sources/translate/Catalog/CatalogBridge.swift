@@ -14,7 +14,8 @@ struct CatalogPromptConfiguration: Sendable {
         let to = CatalogBridge.normalizeLanguage(code: request.targetLanguage.rawValue)
         var contextParts: [String] = []
         let cliContext = context.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !cliContext.isEmpty { contextParts.append("CLI context: \(cliContext)") }
+        // The model sees the user's --context as plain text; only the comment is labeled.
+        if !cliContext.isEmpty { contextParts.append(cliContext) }
         if let comment = request.developerComment, !comment.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             contextParts.append("Developer comment: \(comment)")
         }

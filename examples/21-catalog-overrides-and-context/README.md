@@ -1,6 +1,6 @@
 # Render catalog metadata and context
 
-CLI prompts override both implicit xcode-strings fields. Each real request renders the string key, comment, segment, filename, format, text, and context. Combined context labels CLI context and developer comment; {comment} contains only the developer comment.
+CLI prompts override both implicit xcode-strings fields. Each real request renders the string key, comment, segment, filename, format, text, and context. Combined context is the CLI context as given, then the developer comment labeled `Developer comment:`; {comment} contains only the developer comment.
 
 Run from the repository root after the [common setup](../README.md):
 
@@ -60,10 +60,10 @@ CLI SYSTEM: English to French; file=Localizable.xcstrings; format=text.
 key=greeting
 comment=Greeting on the welcome screen.
 segment=stringUnit
-context=CLI context: Friendly welcome.
+context=Friendly welcome.
 Developer comment: Greeting on the welcome screen.
 block:
-Additional context: CLI context: Friendly welcome.
+Additional context: Friendly welcome.
 Developer comment: Greeting on the welcome screen.
 text=Hello %@
 
