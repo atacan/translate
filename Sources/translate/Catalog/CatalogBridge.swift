@@ -64,8 +64,36 @@ enum CatalogBridge {
         let network: NetworkRuntimeConfig
 
         func translate(_ request: TranslationRequest) async throws -> String {
-            let result = try await provider.translate(prompts.providerRequest(for: request, network: network))
-            return ResponseSanitizer.stripWrappingCodeFence(result.text).text
+            do {
+                let result = try await provider.translate(prompts.providerRequest(for: request, network: network))
+                return ResponseSanitizer.stripWrappingCodeFence(result.text).text
+            } catch let error as ProviderError {
+                throw CatalogBridge.segmentError(for: error)
+            }
         }
+    }
+
+    /// HTTP statuses that will fail every remaining segment the same way: bad credentials,
+    /// no permission or billing, unknown model/endpoint, and DeepL's quota exhaustion.
+    static let fatalHTTPStatusCodes: Set<Int> = [401, 402, 403, 404, 456]
+
+    /// Readable failure text, marked fatal when retrying other segments cannot help.
+    static func segmentError(for error: ProviderError) -> any Error {
+        if let status = error.statusCode, fatalHTTPStatusCodes.contains(status) {
+            return CatalogTranslationAbort(reason: error.message)
+        }
+        if case .unsupported = error { return CatalogTranslationAbort(reason: error.message) }
+        return CatalogSegmentError(message: error.message)
+    }
+
+    /// Stop after this many failures in a row. Concurrent requests can fail together in a
+    /// short outage, so the limit grows with the request concurrency.
+    static func maxConsecutiveFailures(jobs: Int) -> Int {
+        max(10, 2 * max(1, jobs))
+    }
+
+    struct CatalogSegmentError: Error, CustomStringConvertible {
+        let message: String
+        var description: String { message }
     }
 }

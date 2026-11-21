@@ -103,10 +103,24 @@ struct CatalogPendingPlan: Sendable {
         return Self(catalog: catalog, targetLanguage: target, requests: requests, prepared: prepared, original: original, slots: slots)
     }
 
-    func translate(using translator: any CatalogTextTranslator, jobs: Int) async throws -> CatalogTranslationResult {
+    /// Translate pending segments. `onCheckpoint` receives the fully encoded catalog with
+    /// every segment translated so far, so callers can persist progress during long runs.
+    func translate(
+        using translator: any CatalogTextTranslator,
+        jobs: Int,
+        maxConsecutiveFailures: Int? = nil,
+        checkpointPolicy: TranslationCheckpointPolicy = .default,
+        onCheckpoint: (@Sendable (String) async throws -> Void)? = nil
+    ) async throws -> CatalogTranslationResult {
         if requests.isEmpty { return CatalogTranslationResult(catalog: catalog, report: TranslationReport(stats: TranslationStats(), failures: [])) }
-        let result = try await CatalogTranslationEngine(translator: ValidatingCatalogTranslator(base: translator), options: TranslationOptions(maxConcurrentRequests: jobs))
-            .translateCatalog(prepared, to: targetLanguage, mode: .bestEffort)
+        let options = TranslationOptions(maxConcurrentRequests: jobs, maxConsecutiveFailures: maxConsecutiveFailures, checkpointPolicy: checkpointPolicy)
+        var checkpoint: (@Sendable (CatalogTranslationResult) async throws -> Void)?
+        if let onCheckpoint {
+            let plan = self
+            checkpoint = { @Sendable partial in try await onCheckpoint(try plan.encodedCatalog(partial)) }
+        }
+        let result = try await CatalogTranslationEngine(translator: ValidatingCatalogTranslator(base: translator), options: options)
+            .translateCatalog(prepared, to: targetLanguage, mode: .bestEffort, onCheckpoint: checkpoint)
         let document = try reconciled(result)
         return CatalogTranslationResult(catalog: try JSONDecoder().decode(StringCatalog.self, from: JSONEncoder().encode(document)), report: result.report)
     }
@@ -120,7 +134,9 @@ struct CatalogPendingPlan: Sendable {
 
     private func reconciled(_ result: CatalogTranslationResult) throws -> JSONValue {
         let translated = try JSONDecoder().decode(JSONValue.self, from: JSONEncoder().encode(result.catalog))
-        let failures = Set(result.report.failures.map { SlotKey(key: $0.stringKey, segment: $0.segment) })
+        // Only slots the engine reports as translated take new values. Failed slots and
+        // slots not yet attempted (a checkpoint or an aborted run) keep their original value.
+        let translatedSlots = Set(result.report.translatedRequests.map { SlotKey(key: $0.stringKey, segment: $0.segment) })
         var document = original
         var sets: [[String]: Bool] = [:]
         var successfulSets: Set<[String]> = []
@@ -128,7 +144,7 @@ struct CatalogPendingPlan: Sendable {
             let key = SlotKey(key: request.stringKey, segment: request.segment)
             guard let slot = slots[key] else { continue }
             if let index = slot.index {
-                if failures.contains(key) { sets[slot.path] = false; continue }
+                if !translatedSlots.contains(key) { sets[slot.path] = false; continue }
                 var set = document.value(at: slot.path)?.object ?? [:]
                 var values = set["values"]?.array ?? []
                 let sourceCount = translated.value(at: slot.path)?.object["values"]?.array?.count ?? index + 1
@@ -139,7 +155,7 @@ struct CatalogPendingPlan: Sendable {
                 document.set(.object(set), at: slot.path)
                 successfulSets.insert(slot.path)
                 if sets[slot.path] == nil { sets[slot.path] = true }
-            } else if !failures.contains(key), let value = translated.value(at: slot.path)?.object["value"] {
+            } else if translatedSlots.contains(key), let value = translated.value(at: slot.path)?.object["value"] {
                 // A missing substitution needs its argNum/formatSpecifier, but must
                 // not inherit source variation values for failed sibling segments.
                 if let source = slot.substitutionSource, let offset = slot.path.indices.dropFirst(4).first(where: { slot.path[$0] == "substitutions" }) {

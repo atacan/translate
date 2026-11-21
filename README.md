@@ -339,6 +339,12 @@ translate --retranslate --in-place --yes --to fr Localizable.xcstrings
 
 Every translated segment is checked for printf/Xcode placeholder identity, type, argument position, formatting, and multiplicity, including escaped `%%`, star width/precision arguments, and `%#@name@` references. Valid positional reordering is allowed, including implicit source arguments changed to explicit target numbering. Mixing numbered and sequential argument consumption is rejected. Invalid output is reported as a segment failure and retains the original target slot. Best-effort runs write valid segments while returning failure status; partial string sets remain incomplete. Unmodeled catalog metadata is preserved.
 
+Long catalog runs save progress as they go. After every 25 translated segments, or 5 seconds after the last save, the catalog with all segments translated so far is written atomically to the output file. A crash, Ctrl-C, or killed job loses at most that last interval, and the file is never left half-written. Overwrite confirmation for an existing output file happens before the first request. Stdout output is written only at the end.
+
+A catalog run stops early, instead of failing every remaining segment, when an error cannot succeed on retry: HTTP 401, 402, 403, 404, DeepL quota exhaustion (456), or an unsupported request. It also stops after max(10, 2 × `--jobs`) segment failures in a row. Retryable HTTP errors (429 and 5xx) are retried per segment first. Segments finished before the stop are written, the error names the cause, and the command returns failure status.
+
+To resume, rerun on the file that holds the saved progress. With `--in-place`, rerun the same command. With a suffixed or `--output` file, translate that file in place, for example `translate --in-place --to fr Localizable_fr.xcstrings`; the error message prints this command. Only missing segments are requested again.
+
 Catalog dry-run parses files and previews up to three actual pending segment requests per catalog with source/target metadata, preset selection and prompt origins, and provider/model. It reports zero pending segments and fails for malformed catalogs. Mixed batches show both paths. Dry-run never calls APIs, requests overwrite confirmation, or writes files, including in-place runs without `--yes`.
 
 ## Configuration

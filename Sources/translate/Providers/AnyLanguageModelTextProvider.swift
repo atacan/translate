@@ -210,6 +210,13 @@ struct AnyLanguageModelTextProvider: TranslationProvider {
             return .timeout(seconds: timeoutSeconds)
         }
 
+        // AnyLanguageModel's HTTP errors are internal types; their description is the only
+        // place the status survives ("HTTP error (Status 401): detail").
+        let described = String(describing: error)
+        if let match = described.firstMatch(of: /HTTP error \(Status (\d{3})\): ?(.*)/), let status = Int(match.1) {
+            return .http(statusCode: status, headers: [:], body: String(match.2))
+        }
+
         let message = error.localizedDescription
         if message.lowercased().contains("timed out") {
             return .timeout(seconds: timeoutSeconds)

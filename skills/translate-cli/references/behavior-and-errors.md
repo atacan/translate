@@ -61,6 +61,8 @@
 - The implicit preset is `xcode-strings` only when no CLI preset, explicit config default, or customized default/general preset selects another preset. Explicit `general` wins. Mixed batches choose defaults and provider/model/target metadata per route.
 - Catalog `sourceLanguage` is authoritative; conflicting non-auto source settings warn. Format hints affect segment `{format}` only; catalogs always use segment translation.
 - `{context}` and `{context_block}` combine CLI context and developer comment with distinct labels. `{filename}`, `{string_key}`, `{comment}`, and `{segment}` expose catalog metadata; segment labels are `stringUnit`, `stringSet[index]`, or `variation[path]`.
+- Catalog runs save progress atomically to the output file every 25 translated segments or 5 seconds, so an interrupted run keeps nearly all finished work. Overwrite confirmation happens before the first request; stdout output is written only at the end.
+- Catalog runs stop early on HTTP 401/402/403/404/456 or unsupported-request errors, and after max(10, 2 × `--jobs`) failures in a row. Finished segments are kept and the command fails. Resume by rerunning `--in-place` on the saved file (the error message prints the command); only missing segments are requested.
 - Catalog dry-run parses inputs and shows up to three real pending requests per file with source/target, preset selection and prompt origins, and provider/model. It reports zero pending segments and fails for malformed catalogs. Mixed inputs show both routes.
 - Dry-run never calls APIs, writes files, or confirms overwrites, including `--dry-run --in-place` without `--yes`.
 

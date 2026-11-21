@@ -34,27 +34,40 @@ struct CatalogWorkflow {
                 )
             }
             let translator = CatalogBridge.makeTranslator(provider: provider, prompts: resolvedPrompts, network: network)
-            let translation = try await pendingPlan.translate(using: translator, jobs: jobs)
-            let encoded = try pendingPlan.encodedCatalog(translation)
 
-            let destination = try write(
-                text: encoded,
-                for: file,
-                outputMode: outputMode,
-                destinationMap: destinationMap,
-                writer: writer,
-                terminal: terminal
-            )
-
-            if translation.report.failures.isEmpty {
-                return TranslationFileResult(file: file, destination: destination, success: true, errorMessage: nil)
+            // Confirm an overwrite before any request is sent, then save progress to the
+            // destination as segments finish. An interrupted run loses at most the last
+            // checkpoint interval, and an in-place rerun resumes from what was saved.
+            let destination = try plannedDestination(for: file, outputMode: outputMode, destinationMap: destinationMap)
+            if let destination { try writer.confirmOverwriteIfNeeded(destination: destination) }
+            var onCheckpoint: (@Sendable (String) async throws -> Void)?
+            if let destination {
+                onCheckpoint = { @Sendable text in try OutputWriter.writeAtomically(text: text, destination: destination) }
             }
 
-            let details = translation.report.failures.map { failure in
-                "'\(failure.stringKey)' (\(CatalogBridge.segmentLabel(failure.segment))): \(failure.reason)"
-            }.joined(separator: "; ")
-            let summary = "\(translation.report.failures.count) segment(s) failed in catalog translation. \(details)"
-            return TranslationFileResult(file: file, destination: destination, success: false, errorMessage: summary)
+            let translation = try await pendingPlan.translate(
+                using: translator,
+                jobs: jobs,
+                maxConsecutiveFailures: CatalogBridge.maxConsecutiveFailures(jobs: jobs),
+                checkpointPolicy: Self.checkpointPolicy,
+                onCheckpoint: onCheckpoint
+            )
+            let encoded = try pendingPlan.encodedCatalog(translation)
+
+            if let destination {
+                try OutputWriter.writeAtomically(text: encoded, destination: destination)
+            } else {
+                terminal.writeStdout(encoded)
+            }
+
+            let report = translation.report
+            if report.failures.isEmpty && report.abort == nil {
+                return TranslationFileResult(file: file, destination: destination, success: true, errorMessage: nil)
+            }
+            return TranslationFileResult(
+                file: file, destination: destination, success: false,
+                errorMessage: Self.failureSummary(report, destination: destination, file: file, outputMode: outputMode, targetLanguage: targetLanguage)
+            )
         } catch {
             return TranslationFileResult(file: file, destination: nil, success: false, errorMessage: (error as? AppError)?.message ?? error.localizedDescription)
         }
@@ -107,26 +120,57 @@ struct CatalogWorkflow {
         return lines.joined(separator: "\n")
     }
 
-    private func write(
-        text: String,
+    static let checkpointPolicy = TranslationCheckpointPolicy(everySegments: 25, interval: 5)
+
+    static func failureSummary(
+        _ report: TranslationReport,
+        destination: URL?,
+        file: ResolvedInputFile,
+        outputMode: OutputMode,
+        targetLanguage: NormalizedLanguage
+    ) -> String {
+        var parts: [String] = []
+        let stats = report.stats
+        if let abort = report.abort {
+            let cause: String
+            switch abort.cause {
+            case .fatalError: cause = "Stopped early after an error that would fail every remaining segment"
+            case .consecutiveFailures(let count): cause = "Stopped early after \(count) segment(s) failed in a row"
+            }
+            parts.append("\(cause): \(abort.reason). \(stats.translatedSegments) of \(stats.attemptedSegments) segment(s) translated; \(stats.skippedSegments) not attempted.")
+        }
+        if !report.failures.isEmpty {
+            let details = report.failures.map { failure in
+                "'\(failure.stringKey)' (\(CatalogBridge.segmentLabel(failure.segment))): \(failure.reason)"
+            }.joined(separator: "; ")
+            parts.append("\(report.failures.count) segment(s) failed in catalog translation. \(details)")
+        }
+        if let destination, stats.translatedSegments > 0 || report.abort != nil {
+            var inPlace = false
+            if case .perFile(_, true) = outputMode { inPlace = true }
+            if inPlace || destination.standardizedFileURL == file.path.standardizedFileURL {
+                parts.append("Translated segments were saved; rerun the same command to translate only the remaining segments.")
+            } else {
+                parts.append("Translated segments were saved to '\(destination.path)'. To translate only the remaining segments, run: translate --in-place --to \(targetLanguage.providerCode) '\(destination.path)'")
+            }
+        }
+        return parts.joined(separator: " ")
+    }
+
+    private func plannedDestination(
         for file: ResolvedInputFile,
         outputMode: OutputMode,
-        destinationMap: [ResolvedInputFile: URL],
-        writer: OutputWriter,
-        terminal: TerminalIO
+        destinationMap: [ResolvedInputFile: URL]
     ) throws -> URL? {
         switch outputMode {
         case .stdout:
-            terminal.writeStdout(text)
             return nil
         case .singleFile(let destination):
-            try writer.writeFile(text: text, destination: destination)
             return destination
         case .perFile:
             guard let destination = destinationMap[file] else {
                 throw AppError.runtime("No output target was planned for this file.")
             }
-            try writer.writeFile(text: text, destination: destination)
             return destination
         }
     }
